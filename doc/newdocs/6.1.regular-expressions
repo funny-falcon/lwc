@@ -1,0 +1,271 @@
+
+regular expressions
+*******************
+
+  Normally, regular expressions have no place in a programming
+language like C.  And we don't have to use them!  Having said
+that, what lwc provides is a regexp-to-C code expander: i.e.
+C code is generated to implement the DFA's that make a regexp.
+
+  This is interesting for two cases:  1) to replace calls to
+strcmp, strcasecmp, strchr, strstr, strsep and the infamous
+sscanf family of functions.  The generated C code is probably
+more efficient and definitelly more powerful  2) for an ultra
+fast regexp implementation.  Still, perl is better for most
+tasks involving text processing though...
+
+  For an introduction to regular expressions see the the man
+page perlretut.
+
+
+1. The Code
+***********
+
+A regexp definition has the syntax:
+
+	[static|inline] RegExp <name> (<recipe-string> [, OPTIONS]);
+
+For example, in a file put the line:
+
+	// in the recipe string you don't have to
+	// escape backslashes!!
+	RegExp email ("(\w[\w.-]*@[\w.-]*\w)");
+
+And compile it with lwc.  The output may seem scary:
+"14 functions for this little regexp!!".  But wait.  The trick
+is that we let the C compiler do the hard work for us.  Any decent
+C compiler must be able to recusrively inline those 14 static
+inliners into ONE function.  [Use 'gcc -S -O3' to see what's inlined]
+
+Generally, you can imagine that testing a string 's' against the
+regexp "^foo$", after inlining will result down to the code equivalent:
+
+	if (s [0] == 'f' && s [1] == 'o' && s [2] == 'o' && s [3] == 0)
+
+Similarily, the regexp "^([cr]at|dog)" will be the same as:
+
+	if (((s [0] == 'c' || s [0] == 'r') && s [1] == 'a' && s [2] == 't')
+	|| (s [0] == 'd' && s [1] == 'o' && s [2] == 'g'))
+
+lwc can use strncmp/strncasecmp for fixed strings. So in the current
+version, unless the option NOSTRFUNC is specified, lwc will convert the
+regular expression "^Hello[12]world" to
+
+	if (!strncmp (s, "Hello", 5) && (s [5] == '1' || s [5] == '2') &&
+	!strncmp (s + 6, "world", 5))
+
+In the generated code there's a function called email_match() and a
+string array called email_recipe.
+
+
+2. Using regexps from lwc
+*************************
+
+Here's a sample email grepping programme.
+
+	RegExp email ("\w[\w.-]*@[\w.-]*\w");
+
+	int main ()
+	{
+		char tmp [1024];
+
+		while (fgets (tmp, 1024, stdin)) {
+			tmp [strlen (tmp) - 1] = 0;
+			if (email_match (tmp))
+				printf ("MATCH: %s\n", tmp);
+		}
+	}
+
+  Pretty small.  Except from regexp definitions, it is possible to
+have just 'regexp declarations'.  This is the case where the recipe
+string is not provided, and lwc will just generate the prototype
+of the name_match() function.  The actual code may be in another
+object file.  The declaration qualifiers static, extern and inline
+can be applied before regexp declarations and definitions.
+static and inline apply on the _match() function.  static and extern
+on the _recipe string.  For example:
+
+	extern RegExp URL;
+
+	... if (URL_match (s)) ...
+
+   If you saw the code in [1], the email_match function has two arguments.
+The second argument has a default value '0' if not specified and otherwise
+is used to extract matches.
+
+
+3. Practical Extraction
+***********************
+
+  In regexps, extraction happens for things that are enclosed in
+parentheses.  The matches are placed in charp_len structures, where
+'p' points to the start of the match in the string, and 'i' has
+the length of the match.  Here is the e-mail grepping program
+extracting and printing the email addresses only.
+
+	RegExp email ("(\w[\w.-]*@[\w.-]*\w)");
+
+	int main ()
+	{
+		char tmp [1024];
+		charp_len e [1];
+
+		while (fgets (tmp, 1024, stdin)) {
+			tmp [strlen (tmp) - 1] = 0;
+			if (email_match (tmp, e)) {
+				char address [100];
+				strncpy (address, e [0].p, e [0].i);
+				address [e [0].i] = 0;
+				printf ("address: %s\n", address);
+			}
+		}
+	}
+
+Some useful things to know:
+
+- the lwc regexps do NOT extract matches inside repetitioners.
+  This is rare and in most cases unwanted.  For example in the regexp
+		((foo)*)(\d\d)
+  there are only 2 matches extracted: the ENTIRE foo sequence and the
+  two digits.  The parentheses around (foo) are used only for groupping.
+
+- in cases where matches are OR'd, the other extract's 'p' is
+  set to '0'.
+		(cat)|(dog)|(bird)
+  There are 3 extracts but only one will be set. The other two
+  will be point to NULL.
+
+- it is possible to turn off extracting from certain parentheses
+  with the embedded modifier (?:), as in perl.
+
+
+4. Regular Expression Details & Misc notes
+******************************************
+
+The differences from perl's regexps are:
+
+[1] Backreferences are *not* supported.  Generally, although
+ with backreferences you can do some things to impress your
+ friends, backreferences cost.  It means that we have to store
+ early matches even if we are not sure we will have an entire
+ match.  So they are not supported (for now at least).
+ Generally, anything which has to do with previous states of
+ the regexp state machine, is not supported.
+
+[2] Anchors and lookahead/lookbacks are not implemented.
+ It is not difficult to implement lookahead, but is it really
+ practical?
+
+[3] The dot '.' matches newlines and there's no option to
+ turn it off.  Whitespace \s matches newlines too.
+
+[4] POSIX class speficiers like :digit: :letter:, etc are
+ not implemented at all.
+
+[5] The case where the first character may or may not be the
+ start of the line, is not implemented.  For example: (^a|bc).
+
+---
+User class abbreviations:
+
+  It's possible to define custom abbreviations for character
+classes like \w, \s and \d.  The syntax uses 'abbrev' in the
+place the regexp name is expected.
+
+	RegExp abbrev ('e', "[1-4a-d+-]");
+	RegExp abbrev ('b', "[^\w\e]");
+
+Custom user classes only work for lowercase letters and the
+uppercase stands for the negated set.  \E == [^\e]
+The characters \r, \n, \f, \a, \t and \x are reserved because
+they have a meaning when escaped.
+---
+Global replacements:
+
+ It is always possible to recheck the string with the _match()
+function *after* the point of the previous match.  A pseudo-code
+would be:
+
+	SET s = start-of-string
+	WHILE regexp_match (s, e)
+		PRINT (e)
+		s = e.p + e.i
+
+
+---
+Options:
+
+ NOCASE: to make case insensitive matches
+
+ NOEX: parentheses are used only for groupping
+
+ PACKED: pack the ctbl array. Usually it goes down to 1/4th
+ but this is not as fast. Other things that minimize the amount
+ of code are enabled, with the cost of speed.
+
+ NOCTBL: use switch-case statements instead of ctbl for
+ character classes.
+
+ NOSTRFUNC: do not use strncmp/strncasecmp. Do not use any other
+ functions at all. Implement all the comparisons with ==
+
+Using the options :  RegExp foo ("...", NOCASE PACKED NOEX);
+
+---
+Extensions:
+
+ Because we want to be able to use regexps instead of strcmp
+and friends, we want the code to be very small and efficient.
+For that we have a new embedded modifier, the ?/ which sais
+that the regexp is to be taken for granted: it will definitelly
+be there.  For example:
+
+	RegExp NameAge ("^(?/NAME: )([a-zA-Z]+) (\d{1,3})");
+
+In this example, the regexp supposes that the strings will
+absolutely definitelly start with "NAME: ", and so it will
+just skip the first 6 letters without checking.  Although
+no checks are done, the enclosed regexp matters for the
+optimizations and it must be of fixed size.
+
+	RegExp zoo ("^(?/(?:Entry|Field):)(\w+)");
+
+---
+Interesting code with
+
+	RegExp cdate ("((?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+"
+		      "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov)\s+"
+		      "\d{1,2}\s+\d\d:\d\d:\d\d\s+\d\d\d\d)", NOCTBL);
+
+---
+At the time, regexps are not reentrant
+
+---
+benchmarks vs. egrep
+
+egrep is cheating at i/o. Benchmarks with fgets() are hopeless!
+
+
+5. The perl operator -- a tribute to perl
+*****************************************
+
+  This is simply a shortcut of the above.  The perl regexp
+operator is the =~ and it's activated only if it is followed
+by a string literal.
+
+	if (datestr =~ "Jan [12] ")
+		printf ("Happy New Year!\n");
+
+is the same as:
+
+	static inline RegExp some_unique_name ("Jan [12] ", NOEX PACKED);
+	if (some_uniqe_name_match (datestr))
+		printf ("Happy New Year!\n");
+
+These regexps are for fast strcmp'ing.  Their code is packed to
+minimal and don't extract anything.
+=~ has the same priority with the other relational operators >= <= < >
+
+
+----
+the regexp facilities of lwc, are superfluous. A library would suffice.

@@ -1,0 +1,276 @@
+
+Fun with Member Functions
+-------------------------
+
+
+  Member functions is a very useful addition to C and it is
+not necessarily related to object oriented programming.  A program that
+uses member functions is *not* an object oriented program.
+Here we'll see some of the interesting things you can do with them.
+
+
+1. Common Variables
+-------------------
+
+  It's often the case that we need two or more functions to
+work on the same variable.  In C this is done with global variables.
+Functions that access the same variable are directly related.
+
+  With member functions, the members of the structure appear
+as common variables between the member functions and this makes
+things much easier.  For example, suppose we want to read the
+elements of a binary tree in-order and store them in an array.
+This is a recursive operation and normally a global variable
+would be used to do it.  This is how it can be done with member
+functions (using lwc facility that structures are passed by
+reference):
+
+	struct Node {
+		Node *less, *more;
+		char *word;
+	};
+
+	struct tree_to_array {
+		int nr;
+		char **array;
+		void count_nodes (Node);
+		void node_to_tree (Node);
+	};
+
+	void tree_to_array.count_nodes (Node n)
+	{
+		++nr;
+		if (n.less) count_nodes (n.less);
+		if (n.more) count_nodes (n.more);
+	}
+
+	void tree_to_array.node_to_array (Node n)
+	{
+		if (n.less) node_to_array (n.less)
+		array [nr++] = n.word;
+		if (n.more) node_to_array (n.more);
+	}
+
+	Node *root;
+
+	char *do_tree_to_array ()
+	{
+		tree_to_array T;
+
+		T.nr = 0;
+		T.count_nodes (root);
+		T.array = (char**) malloc (T.nr * sizeof (char*));
+		T.nr = 0;
+		T.node_to_tree (root);
+		return T.array;
+	}
+
+This has the advantage that the common variables are in the stack frame
+of do_tree_to_array() while global variables would be in the data segment
+and they would remain there for the entire program.  Moreover, the
+above example is thread-safe for the same reason.  On the other hand,
+the approach with global variables is faster in the above case.
+
+
+2. Nested Functions
+-------------------
+
+  In general, member functions obsolete the need for nested functions.
+Nested functions were not included in C for a purpose: the effect can be
+implemented by normal functions + common data.  A nested function would
+be something like:
+
+	int f1 ()
+	{
+		// these are also used by the inner function
+		int n1, n2;
+		// these are only used by f1 
+		int i, j, k;
+
+		int f2 ()
+		{
+			int a, b, c;
+			// uses n1, n2;
+		}
+
+		i = f2 ();
+	}
+
+
+  With member functions that can be achieved like this:
+
+	class ff {
+		int n1, n2;
+		int f2 ();
+	   public:
+		int f1 ();
+	};
+
+ This is a superset of the nested function case if you think about it
+well enough.
+
+
+3. Returning Many Values
+------------------------
+
+  It is often the case that we want a function to return more than
+one value.  This is usually achieved by passing the addresses of the
+extra values and have the function store the results in them.
+With member functions that can be easilly solved: the return values
+are in the variable members of the structure.
+
+For example, suppose a function which takes an internet address,
+like "http://www" or "ftp://user@host:ftp.com" and returns,
+an identifier to describe the type of the protocol, the host
+address and the authentication data if available:
+
+	struct parse_address {
+		int protocol;
+		char *address;
+		char *username;
+		parse_address (char*);
+	}
+
+	int test ()
+	{
+		parse_address P ("http://www.barney.org");
+		if (P.protocol != PROTO_HTTP && P.protocol != PROTO_FTP)
+			error ("unsupported protocol");
+		dns_lookup (P.address);
+		connect (P.address);
+		if (P.username) ....
+	}
+
+In this case, it's an great idea to combine the function with
+the constructor of the structure, like in the example above.
+
+
+4. Bottom-up Library Design
+---------------------------
+
+  All the right-thinking bottom-up people of the world start by
+adding black boxes to a library.  Such a library entry is
+
+	int strcmp (char*, char*);
+
+The "black box" in this case is strcmp.  We know what arguments
+it takes, what it does and what it returns but not "how it does it".
+There are cases however, where a library entry is not described by
+one function only.  An example is the fopen, fread, fclose functions
+of stdio.  fopen is not a library entry like strcmp, the FILE structure is.
+With member functions C streams would be implemented like this:
+
+	class FILE {
+		char buffer [FILE_BUFFER];
+		int nr, file_descriptor;
+		void read_from_buffer ();
+		void write_to_buffer ();
+	   public:
+		//int fopen (char*, char*);
+		FILE (char*, char* = "r");	// this is fopen
+		bool success;
+
+		int fread (void, int, int);
+		int fwrite (void, int, int);
+		int fputs (char*);
+		char *fgets (char*);
+		int fprintf (char*, ...);
+		int fputc (int);
+
+		//int fclose ();
+		~FILE ();	// this is fclose
+	};
+
+	FILE stdin, stdout, stderr;
+
+In this case it is clear that the black box is the FILE structure and
+this is a "black box with many buttons".  This looks like the approach
+of Ada for the implementation of libraries.
+
+An advantage from this declaration is that the FILE structure can
+be allocated in the stack as a local object if it is only needed
+for the duration of a function.  In C fopen always uses malloc() to
+create a new stream and fclose always free() to free it.
+
+	int output_tables (FILE);
+
+	int output_stats ()
+	{
+		FILE statistics ("stats.out", "w");
+		if (!statistics.success)
+			perror ("Ops!");
+		statistics.fprintf ("%i %i %i", total, sum, used);
+		output_tables (statistics);
+		statistics.fputs ("---- END OF STATS ----");
+	}
+
+
+5. Multithreaded Programming
+----------------------------
+
+  In multithreaded programs there are two kinds of global
+variables: the ones we want to be shared between the threads
+and the atomic ones.  With member functions at a high level
+it's easy to get a clear way to making big segments of the
+program atomic.  For example:
+
+
+	int *global_shared;
+
+	class atomic_main {
+
+		char *global_atomic [32];
+
+		pthread_t thread_dat;
+
+		int do_something ();
+		int main (int, char**);
+	};
+
+	int main ()
+	{
+		// fork pthreads in atomic_main instances...
+	}
+
+
+6. ??
+-----
+
+7. Make lots of money
+---------------------
+
+
+8. Optimizating Member Functions
+--------------------------------
+
+  Although the variable members of the structure appear as global
+variables to member functions, accessing them is slower because it
+requires pointer indirection through 'this'.  One way to optimize
+this is to copy members to local variables if this is possible.
+For example, suppose a strcuture which contains an array of integers
+and a member function to replace the value v1 in the array with v2:
+
+	struct A {
+		int nr;
+		int *values;
+		void substitute (int, int);
+	};
+
+	void A.substitute (int v1, int v2)
+	{
+		int i;
+		for (i = 0; i < nr; i++)
+			if (values [i] == v1)
+				values [i] = v2;
+	}
+
+The optimized way to write this function is:
+
+	void A.substitute (int v1, int v2)
+	{
+		int nr = nr, *values = values;
+		int i;
+		for (i = 0; i < nr; i++)
+			if (values [i] == v1)
+				values [i] = v2;
+	}

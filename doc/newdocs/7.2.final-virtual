@@ -1,0 +1,82 @@
+final
+~~~~~
+
+lwc implements the attribute 'final'. When a virtual function is declared
+final it cannot be overriden in derrived objects. This can lead to certain
+optimizations in some -rather rare- cases, where virtual calls are converted
+to direct member calls. An example:
+
+	class A {
+	virtual int f ();
+	};
+
+	class B : A {
+		int f () final;
+		int foo () {
+			f ();	// member call!
+		}
+	};
+
+Generally, the approach with auto-functions is more powerful and can
+optimize more cases. In the above example, foo could have been declared an
+auto function and the f() call would also be a member call in this case.
+'final' is helpful in such a situation:
+
+	class A {
+	virtual	int f ();
+	virtual	int k ();
+	};
+
+	class B : A {
+		int f () final;
+		int foo () {
+			return f() + k ();
+		}
+	};
+
+	class C : B {
+		int k ();
+	};
+
+Here, with 'final' the f() call is a member call and the k() call a virtual
+call in 'foo'. final is used to optimize functions which have a pointer to
+an object 'B' and below it -- in other words when calling virtual functions
+with pointers to derrived objects. This is rather rare in OOP but not
+impossible.
+
+B. Virtual inheritance
+~~~~~~~~~~~~~~~~~~~~~~
+
+ Just like a non-pure virtual function overrides a pure one, a final virtual
+function overrides a non-final one. For example:
+
+	class A {
+		virtual int f () = 0;
+	};
+
+	class B : virtual A {
+		int f ();
+	};
+
+	class C : virtual A {
+		int f () final;
+	};
+
+	class D : B, C {
+		// C.f wins
+	};
+
+	int main ()
+	{
+		D d;
+		d.f ();		// calls C.f() !
+	}
+
+If both C.f and B.f are final, it is an error.
+
+
+Finally, final-functions and auto-functions do not stack up.
+We could interpret final as a directive to stop automatically
+redefining the function, but at the moment 'auto' ignores
+'final' and this leads to a reasonable error. Send proposals
+to the list.

@@ -1,0 +1,135 @@
+
+1. Cost-free unwind
+~~~~~~~~~~~~~~~~~~~
+ In order to call the destructors of local objects when exceptions
+are raised, without any performance cost, we need serious help from
+the C compiler.  gcc-3.4 offers such a feature.
+
+ If lwc is compiled with gcc 3.4 and above the cost-free exceptions
+are enabled by default.  This feature can also be enabled or disabled
+at lwc-runtime with the lwc_config options:
+
+	// in a global header
+
+	_lwc_config_ { gcc34cleanup; }		// enable
+	_lwc_config_ { no_gcc34cleanup; }	// disable
+
+ If you are interested in using lwc's try-throw then in this case the
+generated C code must be compiled with '-fexceptions'.  Otherwise lwc
+has arranged for a segmentation violation to happen when you throw.
+
+ In the case of gcc34 cleanups, ALL local objects are automatically
+destructed when exceptions are raised.  The keyword __unwind__ is
+redundant but causes no error when used.
+
+ gcc34 cleanups through exceptions may not work with NPTL's
+cancellations. generally, it's wrong terminating threads with longjmps
+and gcc's _Unwind mechanisms belong to the lwc preprocessor!
+
+
+2. Pure class-typedefs and abstract data members
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ That's the feature from the previous version's wishlist. Example of
+generic object:
+
+	class A {
+	typedef X = 0;
+		X data [100];
+	auto	X& operator [] (int i)	{ return data [i]; }
+	};
+
+	class A_with_ints : A {
+	typedef	int X;
+	};
+
+ Only auto-functions can use abstract data members like 'data'. This member
+is really created in 'A_with_ints'. It is possible to have instances of 'A'
+but the auto functions that use pure typedefs or abstract data members do
+not exist.
+
+The abstract data member, once realized to a type cannot be changed to
+another type.
+
+That's an alternative way to achieve generic programming and the philosophy
+is different.  For a generic container of containers we need forward
+specializations a-la hierarchy stuff.
+
+
+3. automatic typeid generation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ 'typeid' can be the name of a special virtual variable. lwc automatically
+initializes this virtual variable with a pointer to a string which is the
+stringified name of the class.  This can be used to report the type of an
+instance but also compare instances for the same type and even get to
+mutliple-dispatch scenarios.  For example:
+
+	class A {
+	virtual	const char *typeid;
+	};
+
+	class B : A {
+	};
+
+	int main (int argc, char **argv)
+	{
+		// prints "A B"
+		printf ("%s %s\n", A.typeid, B.typeid);
+
+		A *ap = (argc > 2) ? new A : new B;
+		printf ("ap is of type %s\n", ap->typeid);
+
+		// multiple dispatch howto
+		if (ap->typeid == A.typeid)
+			printf ("A");
+	}
+
+It is safe to compare the addresses pointed by typeid as well as
+strcmp'ing them.
+
+
+4. Object Declaration Expressions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ That is a feature present in C++ and it is when an anonymous object
+declaration can be used in expressions.  For example,
+
+	class A {
+		A () {}
+	};
+
+	int f (A);
+
+	int main ()
+	{
+		f (A ());
+	}
+
+In lwc this also works for the structures passed by reference.
+A better example with complex numbers:
+
+	class complex
+	{
+		float re, im;
+		complex ();
+		complex (float, float);
+		complex &operator = (complex);
+		complex operator + (complex);
+	};
+
+	int f ()
+	{
+		complex C1;
+
+		C1 = complex (1, 2) + complex (1.1, 0) + complex (3.14, 2.74);
+	}
+
+Lifetime of the temporary object:
+**The temporary object is constructed before the expression and destructed
+ after it. The exceptions to this are cases where expressions may not be
+ evaluated and they are '?:' '&&' and '||' and 'sizeof'. In the conditional,
+ we can't say
+
+	foo (x ? A () : B ());
+
+ because we want to construct only one of A and B and therefore we'd have to
+ implement a second conditional after foo() to destruct only one. Not
+ implemented.

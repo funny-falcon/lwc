@@ -1,0 +1,25 @@
+#!/bin/sh
+
+
+echo '
+/*
+  If you want to use the builtin C preprocessor, uncomment the DO_CPP line
+  On a gcc system try the script fixincludes.gcc32
+  On anything else experiment with search_dirs/sys_defs
+  Currently the builtin preprocessor is disabled.
+*/
+static const char *const search_dirs [] = {
+	"/usr/include",
+	0
+};
+
+/* Host compiler defines */
+static const char sys_defs [] = 
+"#define __STDC__ 1\n"
+"";
+
+/* uncomment this to enable the builtin C preprocessor */
+//#define DO_CPP
+' > SYS.h
+
+echo "Made generic SYS.h with builtin preprocessor disabled"

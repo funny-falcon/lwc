@@ -1,0 +1,88 @@
+
+The ODR is the one that sais that functions shouldn't appear
+in header files.  The exceptions are:
+
+1. 'static inline' functions
+~~ ~~~~~~~ ~~~~~~~ ~~~~~~~~~
+
+'static inline' functions are very useful.  They can be defined in
+header files but their code only exists in the object files that use
+them. 'inline' may not be obeyed by the compiler, but the effect
+still works.
+
+in lwc you can say:
+
+	// header file
+
+	class A {
+	static inline int f ();
+	};
+
+	int A.f ()
+	{
+		// ...
+	}
+
+
+2. embedded functions
+~~ ~~~~~~~~ ~~~~~~~~~
+
+Functions defined in the definition of a class, are converted
+to 'static inline's by lwc. As in C++, it's ok to have these
+in header files.
+
+	// header file
+
+	class A {
+		int f () { /* ... */ }
+	};
+
+
+3. auto functions
+~~ ~~~~ ~~~~~~~~~
+
+Definitions of auto functions can appear in header files. lwc
+puts those functions in linkonce sections.
+
+	// header file
+
+	class A {
+	auto
+	virtual	int f ();
+	};
+
+	int A.f ()
+	{
+		// ...
+	}
+
+4. member functions of template classes
+~~ ~~~~~~ ~~~~~~~~~ ~~ ~~~~~~~~ ~~~~~~~
+
+Their specializations are placed in linkonce sections as well.
+
+	// header file
+
+	template class T {
+	auto
+	virtual	X f ();
+	};
+
+	X T.f ()
+	{
+		// ...
+	}
+
+5. linkonce specifier
+~~ ~~~~~~~~ ~~~~~~~~~
+
+Functions explictly declared linkonce:
+
+	// header file
+
+	linkonce int f ()
+	{
+		// ...
+	}
+
+							Carl Rosmann

@@ -1,0 +1,151 @@
+
+The Lightweight C++ Preprocessor
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The lightweight c++ preprocessor adds a rich set of extensions
+to the C programming language -- some of which are borrowed from
+C++ and some new ones.
+
+Supported Systems
+-----------------
+
+lwc has only been tested on a gcc-3.2/glibc system.
+Anything else may not work.
+
+In order to run lwc there must be a C preprocessor "cpp"
+In order to use the code produced by lwc
+ the compiler must support C99 and some common GNU-C extensions
+ and the linker must support ".gnu.linkonce" sections
+
+Install
+-------
+
+To install lwc type 'make'
+
+Hopefully the executable "lwc" will appear in objdir.
+
+
+Running
+-------
+The simple way to use lwc is with the command:
+
+	lwc file.c
+
+The command line arguments of lwc are the same of
+the C preprocessor 'cpp'.
+
+The generated C code is printed on stdout.
+
+Output
+------
+
+Usually in makefiles lwc code will be compiled with two
+targets:
+
+	file.o: file.i
+		gcc file.i -o file.o -fexceptions
+
+	file.i: file.c header.h
+		lwc file.c > file.i
+
+It's a very good idea to have the latest version of "indent".
+lwc does not detect all errors and very often you may have
+to browse through the generated C code to see what's wrong.
+
+In this first release of lwc, debugging information is compiled in
+and you can create a file /tmp/LWCD_OUTPUT_INDENTED to force
+lwc to automatically pass the output through "indent".
+(create this file right now if you want)
+
+If the version of indent in your system is < 2 then you'd better
+download the latest version which is >= 2.2.9
+Old versions can't format compound statements in expressions.
+
+What can you do with lwc
+------------------------
+
+1. Program !
+
+2. Study C++ to C conversion basics
+
+3. Add new features to the lwc language
+
+4. Do advanced OOP language research / test new stuff for the next C++
+draft!
+
+5. ??
+
+6. Profit!
+
+Programming
+-----------
+
+  Unlike other languages you are not forced to use OOP features.
+You can simply use lwc for the structure-by-reference convenience,
+for the member functions or even just for the ability to omit
+'struct' and 'enum'.  You are not forced to consider "everything is
+an object".
+
+  If you want to use lwc for programming read the short tutorial in 'doc'
+and have a look at the sample lwc programs included in the package.
+
+  At the moment lwc may support some weird things and may not support others.
+For an example of "weird thing", a structure can be declared in a cast.
+
+  The fact that this works does not mean you should do it: It may be disabled
+in a future version and your program will no longer compile. 
+So use common sense.  lwc works fine with all the reasonable things you may
+ever need to do.
+
+  If you are distributing executables then you can go directly into using lwc.
+
+  If you don't want to bother with executables and you prefer giving the
+source, then you should know that lwc needs to be installed on the
+target system.  The C code produced from lwc is preprocessed and therefore
+very possibly not portable.  Of course you can demand library/architecture
+compatibility, but this is as bad as executables.
+
+ On the other hand, because lwc functions can call normal C functions
+you can include plain C files in your lwc code, which are wrappers
+to the system's libraries.  lwc code can call these wrappers instead
+of including system header files.
+
+ In this sense lwc gives a new meaning to open source.  It is possible
+to distribute only the generated C files and not the lwc ones.  This way
+others can study the code but they can't edit it.  We are against that.
+But it is possible to give the lwc code by request to track the hacker base.
+
+Adding new Features
+-------------------
+		``making standards is quite a challenge.
+		  breaking through them is quite another''
+
+  Adding new features to the language is very easy.  We can have delegates
+tomorrow.  C++-like templates *are* possible. It's also easy to implement
+operator overloading for all the operators, pointer-to-member operators,
+contracts, attributes, properties, singletons  and generally everything
+you see in other programming languages.  
+
+  On the other hand, it is believed that designing a programming language is not
+only about the imagination to conceive features but also about the wisdom
+to avoid some of them.  This is the K&R logic as displayed in the excellent
+book "The C Programming Language".  We wouldn't want to become the most
+over-bloated programming language of the world - C is a spartan language
+afterall... 
+
+Anyway, there's a mailing list for lwc news, bugs, devel and discussion at:
+
+	http://mail.nongnu.org/mailman/listinfo/lwc-list
+
+Bugs
+----
+
+  If lwc crashes or produces invalid C code, be patient. Please post a
+report to the mailing list and it will be fixed ASAP.
+
+Credits
+-------
+
+lwc initial versions written & Copyright (C) 2003, 2004 Stelios Xanthakis.
+
+lwc latest download: http://students.ceid.upatras.gr/~sxanth/lwc/

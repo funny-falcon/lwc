@@ -1,0 +1,106 @@
+
+				``lwc: reinventing the wheel again''
+
+Generally, lwc can be viewed as a set of extensions to C.
+Basic knowledge of C++ is useful because some concepts are
+borrowed from it.  The main goal is syntactical ease: we
+let the lwc preprocessor to do things for us that would be
+tedious, and eventually compress the program and help in
+a better structure.  It is not a "different programming
+language" or something.
+
+TUTORIAL describes all the basic features of the first version.
+
+The other documents document new features that were implemented
+in the next versions of lwc. Some of them are very interesting.
+
+Appendix B attempts to outline the differences with C++, for C++
+experts.
+
+
+List of extensions
+~~~~~~~~~~~~~~~~~~
+
+These extensions *usually* work with each other.
+For example function overloading + member functions,
+or local typedefs + abstract template classes,
+or operator overloading + auto functions.
+
+
+functions:
+- structures passed by reference
+- reference return (lvalue calls)
+- function overloading
+- default arguments
+- returned structure can be passed to argument
+
+structures:
+- member functions (this)
+- ability to omit 'struct' in declarations
+- constructors/destructors, new/delete/localloc
+- local typedefs
+- class constants
+- storage class specifiers apply for inner member functions
+- anonymous unions are transparent
+- modular member functions
+
+hierarchies:
+- implementation
+- automatic upcasting (in assignments, return, and certain expressions)
+- downcasting adjustment in explict casts
+- up/down cast from null is null
+- inheritance & multiple inheritance
+- virtual inheritance (using virtual inheritance declarations)
+- initialization of objects with aggregate initializer lists & designators
+- auto functions
+
+virtual:
+- virtual functions
+- pure virtual functions & abstract interface classes (no instantiation)
+- auto virtual functions
+- 'final' virtual functions
+- virtual tables
+- combination of virtual tables in virtual inheritance
+- inlined / constant virtual table specifications
+- virtual variables
+
+expressions:
+- operator '!!' for boolean toggle
+- non-constant expressions in global
+- operator overloading
+- postfix ()
+- dereference
+
+declarations:
+- reference variables
+- ctors of arrays of objects
+- VLAs transformed to alloca()
+
+statements:
+- switch value
+- do without while
+- first expression of for(;;) can be declaration
+- break 2; continue 2;
+
+code scopes:
+- automatic destruction of locals when scopes close or exit (break,
+continue, return)
+
+macros:
+- multi-line macros (template)
+- abstract template macro classes && hierarchy
+- unique template specializations ('specialize')
+
+misc:
+- builtin regexp code expander
+- linkonce data and code
+- exceptions (try, throw)
+- binary shift enumerators (benum)
+- _loadtext directive
+- __enumstr__ (TAG, value)
+- final statement of main() is "return 0;"
+
+gnu-c:
+- most gnu-c extensions up to gcc 3.2 are supported except getting
+the address of labels and jumping to it (&&label), and constructor
+expressions =(struct foo){ 1, 2, 3}.

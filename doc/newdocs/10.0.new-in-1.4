@@ -1,0 +1,533 @@
+Lightweight C++ 1.4
+~~~~~~~~~~~~~~~~~~~
+
+
+__on_throw__
+~~~~~~~~~~~~
+
+This is a very low level feature rarely used.
+__on_throw__ installs an exception handler which is removed when the
+scope closes.  All exceptions raised within the scope transfer control
+to the __on_throw__ body.  Usually, it will take gotos to resume the
+code, so this is considered bad!
+
+An example of __on_throw__:
+
+	int bar (int i)
+	{
+		if (!(i%33)) throw (void*) i;
+		printf ("processing %i\n", i);
+	}
+
+	int main ()
+	{
+		int x, i;
+		__on_throw__ (void *v) {
+			goto foo;
+		}
+		for (i = 0; i < 100; i++) {
+			bar (i);
+		   foo:;
+		}
+	}
+
+
+conditional goto
+~~~~~~~~~~~~~~~~
+
+Ok, we all know that goto is bad.  But this is a nice feature anyway.
+lwc accepts:
+
+	goto (expression) ? label1 : label2;
+
+and it will transform this to:
+
+	{ if (expression) goto label1; goto label2; }
+
+
+initialization of integer virtual variables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Such variables can be initialized with |= and &=.
+These operators will work by binary or'ing or and'ing the
+supplied value with the value of the parent class.
+
+	class A {
+	virtual	const int flags = 0x1;
+	};
+
+	class B : A {
+		int flags |= 0xf4;
+	};
+
+
+object file constructors
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+A global function named 'ctor' will be renamed to an internal lwc name
+and it will be called before main.  Multiple such functions may exist.
+
+	static void ctor ()
+	{
+		printf ("Hi\n");
+	}
+
+	int main ()
+	{
+		printf ("Main\n");
+	}
+
+
+overloading global new and delete
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Can be overloaded through _lwc_config_ with:
+
+	_lwc_config_ {
+		new = mymalloc;
+		delete = myfree;
+	}
+near the beginning of your program.
+
+
+overloading new and delete
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+new and delete can be overloaded for classes to provide custom allocators.
+The syntax is:
+
+	class A {
+		A *operator new ();
+		void operator delete ();
+	};
+
+operator 'new' is turned into a modular function and therefore has no
+'this'.  From then on, any requests to allocate an instance of 'A' with
+"new" or to deallocate an instance with "delete" will invoke those
+functions.  This *does not* happen when we want to allocate an array of
+A's.  For example, this will not invoke the above functions:
+
+	A *array = new A [123];
+
+but this will:
+
+	A *a = new A;
+
+
+This is a good chance to demonstrate a fun custom object pool allcator,
+mostly to show an example of other interesting features, like pure
+typedefs, modular data members and auto functions.
+
+---------------------* custom allocator pool *-----------------------
+
+	class ALLOCATOR
+	{
+	typedef	OBJ = 0;
+	#define	NP 4096 / sizeof (OBJ)
+		OBJ pool [NP];	
+	modular	OBJ *ffree;
+	auto	ALLOCATOR ();
+	auto modular	OBJ* alloc ();
+	auto modular	void dealloc (OBJ);
+	};
+
+	ALLOCATOR.ALLOCATOR ()
+	{
+	// the only requirement for this to work is the OBJ type must have
+	// a member "fnext" somewhere which is a pointer to an object of the same type
+	// this is usually a union over some other data
+		int i;
+		for (i = 0; i < NP - 1; i++)
+			pool [i].fnext = &pool [i + 1];
+		pool [i].fnext = 0;
+		ffree = &pool [0];
+	}
+
+	OBJ *ALLOCATOR.alloc ()
+	{
+		if (!ffree)
+			new _CLASS_;
+		return postfix (ffree, ffree = ffree->fnext);
+	}
+
+	void ALLOCATOR.dealloc (OBJ x)
+	{
+		x.fnext = ffree;
+		ffree = &x;
+	}
+
+	// ******** a class A and an allocator for it ********
+
+	class A
+	{
+		virtual int foo ()	{ return 0; }
+		union {
+			long data;
+			A *fnext;
+		};
+		A *operator new ()	{ return A_Allocator.alloc (); }
+		void operator delete ()	{ A_Allocator.dealloc (this) ; }
+	   public:
+		A () {}
+		~A () {}
+	};
+
+	class A_Allocator : ALLOCATOR {
+	typedef	A OBJ;
+	};
+
+	int main ()
+	{
+		A *a = new A;
+		delete a;
+	}
+------------------------------------------------------------------------
+finally, new and delete work ONLY for requests to allocate objects of the
+same class.  They will not be invoked for derrived classes.
+
+A possible problem if you override new and delete, is how to invoke
+delete when we destruct an object by a pointer to a base class.  For
+example:
+
+	class Base {
+	virual int f ();
+	};
+
+	class Derrive : Base {
+		B *operator new ();
+		void operator delete ();
+	};
+
+	int main ()
+	{
+		A *a = new B;
+		delete a;	// ??? will not invoke our delete
+	}
+
+One possible solution is to add a function 'release' or something:
+
+	class Base {
+	virtual int f ();
+	auto virtual void __release ()	{ delete *this; }
+	};
+
+and call __release() when we want to delete objects of this hierarchy.
+
+
+random directive
+~~~~~~~~~~~~~~~~
+
+The keyword '_random_' is replaced during preprocessing with a very
+random number.  This can be useful to create values for things like
+hash functions or XOR keys, which are different for every binary
+and cannot be easilly attacked by bad crackers.
+
+	srand (time (NULL) ^ _random_);
+
+
+function aliases
+~~~~~~~~~~~~~~~~
+
+A member function can be an alias for another member function
+(at the moment this applies only for functions of the same class
+but it should be extended to accept classes of the same hierarchy).
+The tremendously useful application of this feature is for
+auto functions as their default action can be set to redirect
+to another function.
+
+	class Object
+	{
+	virtual	void print ();
+	auto virtual void xprint () alias (print);
+	};
+
+	class ListObject : Object
+	{
+		void print ();
+	};
+
+	class StringObject : Object
+	{
+		void print ();
+		void xprint ()	{ putchar ('\''); print (); putchar ('\''); }
+	};
+
+In the above, unless xprint is declared to do something special,
+it will always call the corresponding print() function of its class.
+
+
+__inset__
+~~~~~~~~~~
+
+__inset__ is a pseudo function like __enumstr__.
+It's operation is to check whether the first argument is
+one of the rest arguments.  For example:
+
+	int is_fibbo (int x)
+	{
+		return __inset__ (x, 1, 2, 3, 5, 8, 13, 21, 34, 55);
+	}
+
+
+The thing about __inset__ is that the comparison will be implemented
+with a 'switch()' statement in C.  As a result, the test is performed
+in one step.  The values must be constants.
+
+For few values (two or three), it is better to do this the classic
+way with "if (x==1 || x==2)".  The classic way is also better if some
+values are more possible than others of course!
+
+
+Direct Threading
+~~~~~~~~~~~~~~~~
+
+This is a feature crafted especially for pyvm and is rarely needed.
+Just see the output of:
+
+	int foo (int x)
+	{
+		switch (x) : base0, labels[] {
+		case 1: x = 1;
+		case 2: /* .... */
+		/* more cases and maybe a default .... */
+		}
+	}
+
+The thing is that lwc generates two variables, 'void *base0' and
+'int labels[]'.  The rule is that, using gnuc computed gotos we
+can jump into cases.
+
+	goto *(base0 + labels [x]);
+
+will jump into case 'x'.  The value of 'x' must be less than the
+greatest case value. If not, because there is no bounds checking
+the program will crash. Also, if there is no default and the value
+of x is not one of the cases, you can never know what will happen.
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+_v_p_t_r_ exposed to userland
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The virtual table pointer is available as a normal data member.
+By simply comparing _v_p_t_r_ we can easilly implement isinstance
+functionality:
+
+	class A {
+	auto modular bool isinstance (A a)
+		{ return A._v_p_t_r_ == _v_p_t_r_; }
+	};
+
+It is even possible to modify _v_p_t_r_ and have some kind or
+run-time object mutation.  Because by default this pointer is
+a constant member, in order to reassign it the virtual table
+must be declared 'volatile'.  For example:
+
+	class A {
+		volatile virtual;
+		int i;
+	virtual	int f ()	{ return 1; }
+	};
+
+	class B : A {
+		int f ()	{ return 2; }
+	};
+
+	int main ()
+	{
+		A *a = new A;
+		B *b = new B;
+
+		void *p = b->_v_p_t_r_;
+
+		a->f ();	// returns 1
+
+		a->_v_p_t_r_ = p;
+
+		a->f ();	// returns 2!
+	}
+
+Thanks to "volatile virtual", it is possible to modify the vptr
+of object "a".  However, modifying virtual tables like this may
+be dangerous and you must be sure you know what you're doing.
+In the above example, class B does not add any new data members
+and therefore nothing bad can happen.  The following example is
+obviously wrong:
+
+	class C : A {
+		int newdata;
+		int f ()	{ return newdata; }
+	};
+
+	int main ()
+	{
+		A *a = new A;
+		C *c = new C;
+		a->_v_p_t_r_ = c->_v_p_t_r_;
+		a->f ();	// crash! looks for 'newdata' in an 'A'
+	}
+
+Modifying virtual pointers can also have unpredictable results if
+you don't know what you are doing.  For instance:
+
+	int main ()
+	{
+		A a;
+		a._v_p_t_r_ = B._v_p_t_r_;
+		a.f ();		// will return 1 because not a virtual call!
+	}
+
+Which simply means that it's not possible to take advantage of
+auto-functions and other cases that turn calls to direct member calls
+AND modify _v_p_t_r_!
+
+
+Finally, it is possible to get the same info from <class>._v_p_t_r_
+which is the value _v_p_t_r_ will have for all objects of the class
+type.  So we can say:
+
+	a->_v_p_t_r_ = B._v_p_t_r_;
+
+In the case a class has many virtual tables, lwc does not perform
+any resolution and it will give an error.  In order to use _v_p_t_r_
+we have to cast to a base class:
+
+	class A {
+	virtual void f1()	{ }
+	};
+
+	class B {
+	virtual void f2()	{ }
+	};
+
+	class C : A, B { };
+
+	int main ()
+	{
+		C *c;
+		void *v;
+		v = c->_v_p_t_r_;	// error!
+		v = ((A*)c)->_v_p_t_r_;	// ok
+		v = ((B*)c)->_v_p_t_r_;	// ok
+	}
+
+Last but not least, there is the declaration specifier '__noctor__'
+for data members of classes.  Normally, if a class has a member
+which is an instance of a class with a virtual table, lwc will
+also initialize the vptr of the encapsulated object.  With __noctor__
+this is avoided but we must make sure that we will manually set
+up vptr!  Try this with and without __noctor__ to see the diff.
+
+	class XX {
+	virtual int f () { return 0; }
+		XX ()	{ _v_p_t_r_ = XX._v_p_t_r_; }
+	};
+
+	class A {
+	__noctor__ XX x;
+		A ()	{ x.ctor (); }
+	};
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Power varargs
+~~~~~~~~~~~~~
+
+In lwc we have a new way of variable argument functions which does not
+depend on any special header files or macros since it is builtin the
+language (as the compiler *knows* the number of arguments at compile
+time).  The disadvantage of the new style varargs is that all passed
+objects must have the same size -- unlike C's stdarg.  The syntax is:
+
+	int f (int name [...])
+
+After that, 'f' will be turned to
+
+	int f (int namev[], int namec)
+
+When such a function is called, lwc will store the arguments in a
+local array and then pass this array and the count of it's elements
+to the function.  For example:
+
+	int f (int arg [...])
+	{
+		for (int i = 0; i < argc; i++)
+			printf ("%i\n", argv [i]);
+	}
+
+	int main ()
+	{
+		f (1, 2, 3, 4, 5, 6, 7);
+	}
+
+Or...
+
+	void free_all (void *varg [...])
+	{
+		for (int i = 0; i < vargc; i++)
+			free (vargv [i]);
+	}
+
+	int foo ()
+	{
+		free_all (str1, str2, array, bufer)
+	}
+
+Moreover it is easier to pass the varargs to another vararg function,
+or pass an array and count to such a function.  For example:
+
+	int f (int arg [...])
+	{
+		if (argc > 1)
+			return 2 * f (argv + 1, argc - 1);
+		return argv [0];
+		// although our goal is really to unroll recursions!
+	}
+
+This vararg construct is good for passing a variable number of objects
+that need to be constructed and destructed.  For example:
+
+	class A {
+		int i;
+		A (int j)	{ printf ("A(%i)\n", i = j); }
+		~A()		{ printf ("~A(%i)\n", i); }
+	};
+
+	int woot (A arg [...])
+	{
+		for (int i = 0; i < argc; i++)
+			printf ("Got A(%i)\n", argv [i].i);
+	}
+
+	int main ()
+	{
+		woot (1, 2, 3, 4, 5);
+	}
+
+Random notes:
+- this feature is new, and works only in obvious cases
+- function overloading + power varargs is primitive;
+  as far as overloading is concerned, at the time power varargs
+  act just like C varargs (...)
+- in the above example, where we pass a variable number of objects,
+  the objects should not have zero size!!!!!!!
+  if they do, the compiler will rightly complain about divizion by zero!!!
+- generally, because constructors often take many (or none) arguments,
+  the way to invoke complex constructors follows the rules
+  described in the file [6.2.constructing-arrays]
+- right now lwc considers that all constructors *may* throw an
+  exception and for that it keeps a reference of how many objects
+  have been constructed.  If we know that a ctor may not throw,
+  we could optimize the generated code....   "nothrow" ?
+- 'const' in the power varargs sets const on both argv and argc.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+nothrow
+~~~~~~~
+
+ this is most useful in conjunction with __unwind__ or local arrays of
+objects with destructors.
+
+Normally, lwc does an analysis for whether a function may throw an
+exception.

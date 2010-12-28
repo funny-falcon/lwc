@@ -1,0 +1,46 @@
+Variable Length Arrays
+======================
+
+  Variable Length Arrays (VLA) are part of the C99 standard.
+lwc converts VLA to stack allocation with alloca() (or VLA's can
+be used to invoke alloca() in lwc world). For example, the code:
+
+	int foo (int i)
+	{
+		char *X [i];
+	}
+
+will be turned to:
+
+	int foo (int i)
+	{
+		char **X = (__typeof__(X)) alloca (i * sizeof *X);
+	}
+
+Generally, VLA are not efficient because they break the constant
+offset of local variables and the constness of sizeof. As a result,
+in the C99 code
+
+	int f (int i, int j)
+	{
+		char A [i];
+		char B [j];
+		int x;
+	}
+
+the address of 'x' is not known at compile-time. It has to be computed
+each time depending on i and j. We do not believe that the compiler has
+the authority to re-order declarations. Therefore the code may become
+very inefficient. Moreover, mixing C99 VLAs and alloca's doesn't have
+the desired effect (VLA's not released when scope ends)
+
+So lwc VLA are different from C99 VLA. The differences are:
+
+1. sizeof VLA reports sizeof pointer in lwc. In C99 sizeof vla
+   is the real size (but then again the allocation quantity *is*
+   known).
+2. lwc VLA exist until the function exits. Just like alloca.
+
+<rant>
+They should've standarized alloca()!
+</rant>

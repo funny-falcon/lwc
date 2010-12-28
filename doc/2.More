@@ -1,0 +1,788 @@
+More Lightweight C++  -  Tutorial 2
+===================================
+
+This tutorial documents the rest of the interesting features
+that have been implemented in lwc.  Details about them can be
+found in the directory 'newdocs'. 
+
+
+Portable output
+~~~~~~~~~~~~~~~
+
+It is a good practice to include library C headers like this:
+
+	extern "stdio.h" {
+	#include <stdio.h>
+	}
+
+lwc will read declarations from stdio but it will only print
+another "#include <stdio.h>" in the output.  So the generated
+code will be easy to read as a C program and it will be more
+portable if we want to distribute the generated C files
+pre-compiled.  The output is no longer "preprocessed C".
+
+
+A. Exceptions
+=============
+
+  lwc supports exceptions with 'throw', 'try' and 'else'.
+Full details are found in the file newdocs/3.2
+A difference with C++ is that in lwc we do not throw objects.
+
+				Cleanup on throw
+
+	One important thing about C++ is that destructors of local
+	objects are called during the unwind-stack phase.  There are
+	two choices:
+
+	[1] All objects are destructed during unwind and destructors
+	    also work with goto.  These are zero-cost exceptions like
+	    C++.
+
+	    This is the case where the gcc attribute 'cleanup' is
+	used.  The generated code MUST BE COMPILED with -fexceptions,
+	otherwise, no destructors will be called for locals.  Ever.
+
+	The disadvantage of this method is that the binary is
+	significantly bigger and the generated C can only be compiled
+	with gcc-3.4 and above.  Moreover the gcc interface for using
+	the cleanup facilities is rather hairy since we have to
+	include the internal gcc file <unwind.h> and use an interface
+	which --unfortunatelly-- very possibly will be modified in
+	future gcc versions.
+
+	[2] No destructors invoked during unwind unless the declaration
+	    specifier '__unwind__' is used at the declaration of the
+	    local object.  This specifier *costs* as it inserts the
+	    object to a linked list (the cleanup list).  Moreover,
+	    goto may skip destruction.
+
+	    This is the portable mode.  If you don't care about
+	using exceptions or about destruction through the unwind phase,
+	it's suggested to use this.
+
+	Generally, if lwc has been compiled with gcc-3.4 and above,
+	the default mode is mode [1].  It's possible to turn off
+	this and fall back to [2] with the lwc statement:
+
+		_lwc_config_ {
+			no_gcc34cleanup;
+		}
+
+	near the top of your program.
+
+	[*] Recent tests with gcc have shown that cost-free exceptions
+	are not so cost-free after all.
+
+		_lwc_config_ {
+		//	no_gcc34cleanup;
+		}
+		int VV;
+		__unwind__ class A {
+			int i;
+			A (int k)	{ i = k; ++VV; }
+			~A()		{ --VV; }
+		};
+		void recur (int x)
+		{
+			A a(x);
+			if (x > 1000) throw 0;
+			recur (x+1);
+		}
+		int main ()
+		{
+			for (int i = 0; i < 1000; i++)
+				try recur (0);
+		}
+	In the above benchmark program, gcc34 cleanups are
+	magnitutes slower than lwc's manual cleanup!
+	However, this may have been fixed in gcc 4.0
+
+
+An example of exceptions (without any object destructions):
+
+	extern "stdio.h" {
+	#include <stdio.h>
+	}
+
+	void recur (int x)
+	{
+		printf ("Entered %i\n", x);
+		if (x == 10)
+			throw 0;
+		recur (x + 1);
+	}
+
+
+	int main ()
+	{
+		try (void *retval) {
+			printf ("try\n");
+			recur (0);
+			printf ("This is never reached.");
+		} else
+			printf ("caught exception, retval=%p\n", retval);
+	}
+
+
+B. auto functions, pure member functions, pure class typedefs
+=============================================================
+
+  auto functions is one of the more kick-ass features of the lightweight C++
+programming language.  The rule is that an auto-function is always redefined
+by the compiler in derrived classes if it is not redefined by the
+programmer.  Since a different definition exists for every class, auto
+functions will do direct member calls instead of virtual calls for member
+functions of their class (and virtual variables and downcasting).
+A small example:
+
+	class A {
+		int v ()	{ return 1; }
+	virtual	auto int f ()	{ return v(); }
+	};
+
+	class B : A {
+		int v ()	{ return 2; }
+	};
+
+Here, there are two functions, "A.f" and "B.f", the second automatically
+redefined by lwc.  Each calls the corresponding v() function.
+Another interesting example:
+
+	class A {
+	auto virtual	int dynamic_sizeof () { return sizeof (*this); }
+	};
+
+Generally, auto-functions rock so much that they introduce new rules
+for pure members.  Specifically, non-virtual functions can be pure (!)
+as long as they are called by auto functions only.  In the first example,
+"A.v" could have been pure.  lwc would do code elimination and it wouldn't
+emit "A.f".
+
+Moreover, auto functions can do generic programming by being based on
+local class typedefs.  Consequently, we can have *pure class typedefs*
+Example:
+
+	class A {
+	typedef X = 0;
+		X data [100];
+	auto	X& operator [] (int i)	{ return data [i]; }
+	};
+
+	class A_with_ints : A {
+	typedef	int X;
+	};
+
+This however is still experimental.
+
+[newdocs/3.1, newdocs/8.1, newdocs/9.0]
+
+
+
+C. Various
+==========
+
+
+1. String Literals
+~~~~~~~~~~~~~~~~~~
+
+String literals can be enclosed in *single quotes*:
+
+	char msg [] = '"What do you want?" said Elwood';
+
+The way to distringuish from a character constant is the
+number of letters.  If a single-quoted string has less than
+four letters it will not be converted to a real string!
+
+Another feature is *raw strings*.  lwc will escape the
+backslashes in them so the resulting string is the same
+as the one written:
+
+	char recipe [] = r"\w\s+";
+
+
+2. Variable Length Arrays
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+They are supported and converted to alloca().
+
+	int f (int x)
+	{
+		int array [x];
+	}
+
+[see documentation newdocs/7.1]
+
+
+3. enum to string
+~~~~~~~~~~~~~~~~~
+
+lwc can generate strings for enumeration constants with __enumstr__.
+For example:
+
+	enum FOO { A, B, C };
+
+	void f (int v)
+	{
+		printf ("%s", __enumstr__ (FOO, v));
+	}
+
+will print "A", "B", "C" or "(nil)" depending on the value of v.
+
+
+4. for (declaration;;)
+~~~~~~~~~~~~~~~~~~~~~~
+
+Like C99 and C++, the first statement of for(;;) can be a declaration:
+
+	for (int i = 0; i < 10; i++) fork ();
+
+
+5. Parameter name omitted
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As in C++, a parameter name can be omitted:
+
+	int f (int x, int)
+	{
+		return x*x;
+	}
+
+In normal C this is an error.
+
+
+6. Binary enums
+~~~~~~~~~~~~~~~
+
+The declarator 'benum' is like enum but will create the values
+1,2,4,8,16,32,... for the constants.
+
+[see documentation newdocs/3.0]
+
+
+7. linkonce specifier
+~~~~~~~~~~~~~~~~~~~~~
+
+'linkonce' is a specifier like 'static' and 'extern'.
+Data and functions declared linkonce can appear in header files
+and they will be collapsed by the linker into a single instance.
+For example:
+
+	// in a header file
+	linkonce struct {
+		bool opt1, opt2;
+		int maxlen;
+	} Options;
+
+
+8. Long break/continue
+~~~~~~~~~~~~~~~~~~~~~~
+
+break and continue may be followed by a -small- number which
+specifies how many loops the statement will jump out of.
+
+	int f ()
+	{
+		for (;;)
+			for (;;)
+				for (;;)
+					break 3;
+		/* gets here */
+	}
+
+
+9. Anonymous structures and unions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Nested structures and unions without a name that don't declare an
+object can be accessed directly.  This is a good gnuc feature:
+
+	struct A {
+		union {
+			struct {
+				char cmd, arg1;
+				short int arg2;
+			} __attribute__ ((packed));
+			unsigned int i;
+		};
+	};
+
+	int f ()
+	{
+		A a;
+		a.i = 0;
+		a.cmd = 11;
+		a.arg1 = 12;
+	}
+
+
+10. The Amazing postfix Operator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+One of the most popular features.  'postfix' is a reserved word.
+The syntax of 'postfix' is like a function and it has the effect
+that arguments are evaluated from left to right, the return value
+is the leftmost argument (the first one evaluated).
+So postfix can remember for us.  For example:
+
+	// the same as x++
+	postfix (x, x += 1);
+
+	// typical useful case
+	p = postfix (p->next, free (p));
+
+	// increment y by 23 after using the value
+	foo (postfix (y, y += 23));
+
+	// do cleanups after calculations
+	return postfix (do_calculate (buffer), free (buffer), release_semaphore ());
+
+
+11. __inset__ pseudo-function
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+__inset__(value, CONST1, CONST2, CONST3...) will check if the value is
+one of the constants.  The test is performed with a switch() in C and
+therefore the complexity is O(1) (or O(log(n)) at worse).  On the other
+hand, if some values are much more probable than others, it's better
+to go with the classic ``if (value == CONST1 || value == CONST2 ...)''.
+Also, in some cases __inset__ can be optimized by breaking it in smaller
+__inset__s to save space.
+
+
+D. More Classes
+===============
+
+0. Virtual variables
+~~~~~~~~~~~~~~~~~~~~
+
+Virtual variables (class variables) can --and should-- be accessed without
+an instance with the syntax <class>.<var>.  Example:
+
+	class A {
+	virtual int ID;
+	};
+
+	int f ()
+	{
+		int x = A.ID;
+	}
+
+
+1. Alternative constructors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  In lwc the constructor is a normal function and can be called at any
+time by calling "object->ctor()".  Similarily, any member function can
+be called instead of the default constructor by supplying its name at
+the object declaration.  Example:
+
+	class A {
+		int i;
+		A (int _i)	{ i = _i; }
+		void ctor2 (int _i)	{ i = -_i; }
+	};
+
+	int f ()
+	{
+		A a1 (12);
+		A a2 ctor2 (12);	// will call ctor2 instead of the
+					// default constructor
+		new A ctor2 (24);
+	}
+
+[newdocs/5.0]
+
+
+2. Calling parent members
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  The standard way to call members from specific parent classes is
+by using casts.  Alternatively the syntax <class>.<member> can be
+used.  This applies only inside member functions, for classes that
+are parent and only for their methods.  Example:
+
+	class A {
+		A () {}
+	};
+	class B : A {
+		B () {
+			((A*)this)->ctor ();
+			A.ctor ();	// feature. same as above
+		}
+	};
+
+
+
+3. modular members
+~~~~~~~~~~~~~~~~~~
+
+'modular' is a declaration specifier for members.  Generally, modular
+member functions don't have 'this' and can't access any instance
+members.  This is mainly useful for virtual modular functions which
+are attached to the vt of the class but do not need to access any
+data from it.  They are like good old C callbacks.  Example:
+
+	class StandardFractal {
+		virtual modular bool iszero (float f)
+		{ return fabsf (f) < 0.01f; }
+		void do_calculations ();	// calls iszero
+	};
+
+	class PreciseFractal : StandardFractal {
+		bool iszero (float f)
+		{ return fabsf (f) < 0.0001f; }
+	};
+
+'modular' also makes sense with 'auto functions'.  An interesting
+example:
+
+	class A {
+	auto modular bool isinstance (A *a)
+		 { return _v_p_t_r_ == a._v_p_t_r_; }
+	};
+
+There can also be modular data members.  These are like C++'s
+static data members with the difference that we don't have to supply
+their definition in a file -- they are automatically placed linkonce.
+
+[newdocs/5.2, newdocs/8.0]
+
+
+4. 'final' specifier
+~~~~~~~~~~~~~~~~~~~~
+
+The 'final' specifier can be applied on member functions to tell
+the lwc compiler that the function cannot be overriden in derrived
+classes.  As a result, some optimizations can happen.  Example:
+
+	class A {
+	virtual	int f ();
+	virtual	int k ();
+	};
+
+	class B : A {
+		int f () final;
+		int foo () {
+			return f() + k ();
+		}
+	};
+
+Here, the call "f()" in foo is not a virtual call.
+[newdocs/7.2]
+
+
+5. Fun with virtual tables
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It's possible to tune the virtual table generation with the
+specifiers 'inline', 'const' and 'volatile'.
+
+	class A {
+		inline const volatile virtual;
+	};
+
+inline means that the entire vtable is included in the struct.
+const means that the vtable contens cannot be modified.
+volatile means that the pointer to the vtable can be modified.
+volatile+inline makes no sense.
+
+
+6. typeid virtual variable
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The special declaration 'virtual char* typeid' in a class
+will instruct lwc to automatically initialize the virtual variable
+'typeid' with a string which is the name of the class.  Useful for
+multiple dispatch scenarios.  Example:
+
+	class A {
+	virtual	const char *typeid;
+	};
+
+	class B : A {
+	};
+
+	int main (int argc, char **argv)
+	{
+		// prints "A B"
+		printf ("%s %s\n", A.typeid, B.typeid);
+
+		A *ap = (argc > 2) ? new A : new B;
+		printf ("ap is of type %s\n", ap->typeid);
+
+		// multiple dispatch howto
+		if (ap->typeid == A.typeid)
+			printf ("A");
+	}
+
+[newdocs/9.0]
+
+
+7. declaration specifiers for classes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Declaration specifiers before a class declaration apply for all
+members.  This happens for 'static', 'virtual', 'auto', 'inline',
+'final' and 'modular'.  For example:
+
+	static inline class A {
+		int f ();
+		int g ();
+	};
+
+is the same as
+
+	class A {
+	static inline auto int f ();
+	static inline auto int g ();
+	};
+
+'static' sais that all generated functions will be static.
+  --it's good for classes declared in C files (not .h).
+'auto' sais that all declared functions are auto.
+'virtual' sais that all fuctions are virtual.
+'inline' sais that all generated funtions will have the inline
+  specifier.
+'final' means that all the virtual functions of the class will
+  not be overriden in derrived classes (or that the class will not derrive)
+'modular' means that all members (both functions and code) are
+  modular.  In other words this looks very much like C++'s namespaces.
+
+Moreover, the declaration specifiers '__unwind__' and '__noctor__'
+in a class declaration mean that these specifiers are automatically
+enabled when the class is instantiated.
+'__unwind__' means that whenever an instance of this class is
+  declared as a local object, it will always be registered for
+  unwind through cleanups (if gcc34 cleanups are used this is ignored).
+'__noctor__' is a special flag that is related to runtime _v_p_t_r_
+  alternation and should not be used if not sure about it.
+
+Finally, those class-specifiers do not apply for derrived classes.
+
+
+8. modifiable vptr
+~~~~~~~~~~~~~~~~~~
+
+If you know what you're doing, it is possible to modify the
+virtual table pointer of a class and have runtime object
+mutation.
+
+	class A {
+		volatile virtual;
+	virtual	int f ()	{ return 1; }
+	};
+
+	class B : A {
+		int f ()	{ return 2; }
+	};
+
+	int foo ()
+	{
+		A *a = new A;
+		B *b = new B;
+
+		a->f ();	// 1
+		b->f ();	// 2
+
+		a->_v_p_t_r_ = b->_v_p_t_r_;
+		b->_v_p_t_r_ = A._v_p_t_r_;
+
+		a->f ();	// 2
+		b->f ();	// 1
+	}
+
+Here, by exchanging the vitrual table pointers of a and b,
+a acts like an object of type 'B' and b as an object of
+type 'A'.  Normally, _v_p_t_r_ is a readonly member.
+It is made writable thanks to "volatile virtual".
+
+[newdocs/10.0]
+
+
+E Template classes and macros
+=============================
+
+1. template classes
+~~~~~~~~~~~~~~~~~~~
+
+template classes act exactly like macros.  They are expanded in normal
+classes by inheriting from them.  For example:
+
+	template class TT {
+		int i;
+		int f ()	{ return i++; }
+	};
+
+	class A : TT {
+		int g ();
+	};
+
+The above code is exactly the same as if it was written:
+
+	class A {
+		int i;
+		int f ()	{ return i++; }
+		int g ();
+	};
+
+For the benefits of template classes see newdocs/2.1
+
+Another advantage of template classes is that we can do more
+advanced stuff by declaring members of template classes outside
+their class, and even reference the template class type.
+
+	template class TT {
+		int i;
+		void copy (TT);
+	};
+
+	void TT.copy (TT t)
+	{
+		i = -t.i;
+	}
+
+	class A : TT {
+	};
+	class B : TT {
+	};
+
+Yet anohter interesting featuer is that template classes cope nicely
+with local class typedefs.  For example:
+
+	template class TT {
+		X data [200];
+		X &getitem (int i);
+	};
+
+	X &TT.getitem (int i)
+	{
+		return data [i];
+	}
+
+	class A : TT {
+		typedef int X;
+	};
+
+where the above program is exactly the same as:
+
+	class A {
+		typedef int X;
+		X data [200];
+		X &getitem (int i)	{ return data [i]; }
+	};
+
+Finally, if you're going to use template classes with local
+typedefs, you may find interesting to use 'specialize'.
+[newdocs/2.1, newdocs/4.3]
+
+
+F. References
+=============
+
+0. Reference calls virtual
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Calling virtual member functions of structures passed by reference
+invokes virtual calls:
+
+	class A {
+	virtual int f ();
+	};
+
+	int foo (A a1)
+	{
+		A a2;
+
+		a1.f ();	// virtual call
+		a2.f ();	// member call -- type known
+	}
+
+
+1. Reference return
+~~~~~~~~~~~~~~~~~~~
+
+References are normally supported.  The most useful application
+of references is functions returning references, and therefore
+function calls being lvalues.
+
+	class A {
+		int data[100];
+		int &f (int i)	{ return data [i]; }
+	};
+
+	int main ()
+	{
+		A a;
+		a.f(10) = a.f(20) = 2233;
+	}
+
+In this case both an object and a pointer to object can be returned.
+lwc will make the neccessary conversions.
+
+
+2. References as types
+~~~~~~~~~~~~~~~~~~~~~~
+
+References are like C++'s references: everything that happens on
+them in reallity happens to the object they are pointing at.
+Moreover lwc implementes the unary operator 'dereference' in order
+to reassign references.
+
+	int foo ()
+	{
+		int i, j;
+		// ri is an 'alias' of i
+		int &ri = i;
+		int &rj = j;
+
+		ri = 0;		// same as i = 0
+		ri++;		// same as i++
+		ri = rj;	// same as i = j
+
+		dereference (ri) = &j;		// make ri point to j
+		dereference (ri = rj);		// assign reference to reference
+		dereference ri = dereference rj; // or same thing
+	}
+
+"dereference" is useful in order to initialize class members which
+are references.  Example:
+
+	class A {
+		int &REF;
+		A (int *i)	{ dereferece REF = i; }
+	};
+
+
+G. Objects
+==========
+
+1. Object declaration expressions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An object declaration can be an expression, as in C++.
+
+	class X {
+		int i;
+		X (int _i)	{ i = _i; }
+	};
+
+	int f (X);
+
+	int main ()
+	{
+		f (X (42));
+	}
+
+Currently there are some limitations with ?:
+[newdocs/9.0]
+
+
+H. More features
+================
+
+lwc also has operator overloading which is described in newdocs/4.2
+there is a regular expression to C code generator, presented in newdocs/6.1
+If you plan to use virtual inheritance, there are informative documents
+ newdocs/2.2 and newdocs/5.2
+

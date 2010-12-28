@@ -1,0 +1,101 @@
+
+Generic programming with auto functions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ Auto-functions, as we already know, are a very powerful feature
+of lwc.  The code expansion can be easilly applied to achieve
+generic code: the same code used with different *types*.
+
+  As of lwc 1.2, auto functions are redefined if they reference
+local typedefs.  For example:
+
+	class X1 {
+		int i;
+		int compare (X1);
+	};
+
+	class X2 : X1 {
+		int j;
+		int compare (X2);
+	};
+
+	class A {
+	typedef X1 X;
+	auto	int a () {
+			X i, j;
+			return i.compare (j);
+		}
+	};
+
+	class B : A {
+	typedef X2 X;
+	};
+
+In class B, the auto function 'a()' is redefined and it uses
+the X2 type for its definition.  So A.a calls X1.compare and
+B.a calls X2.compare and therefore we avoid the overhead of
+the virtual table in classes X1 and X2.
+
+Furthermore, local typedefs can be used in the prototypes (return
+value and arguments) of auto functions.
+
+	class A {
+	typedef X1 X;
+	modular
+	auto	X* a (X1 *x) {
+			return (X*) x;
+		}
+	};
+
+	class B : A {
+	typedef X2 X;
+	};
+
+Which has an effect similar to C++'s covariant return types although
+it doesn't always work with virtual functions.
+
+Still, 'template classes' are more generic since they allow the definition
+of generic data members. (see container)
+
+------------------------
+Future Directions:
+
+The ability to have pure non-virtual functions and generic programming,
+comes naturally with the existance of auto-functions.  It is about
+compile-time polymorphism.  Our goal is to use compile-time polymorphism as
+much as possible and leave virtual calls in just the necessary places.
+
+In this spirit we could also implement:
+
+ - Pure local typedefs.  For example:
+
+	class A {
+	typedef X = 0;
+	auto	X *a () { /* ... */ }
+	};
+
+	class B : A {
+	typedef int X;
+	};
+ 
+   where no code is generated for A.a() because it uses a pure typedef.
+
+ - Pure data members.
+
+	class A {
+	typedef X = 0;
+		X data;
+	auto	void a ()	{ /* uses this->data member */ }
+		void foo ()	{ /* doesn't use anything generic */ }
+	};
+
+	class B : A {
+	typedef int X;
+	};
+
+   where the data member 'data' is really created in class B and no code is
+   emitted for A.a() because it uses this abstract data member.  With this
+   addition, we can do almost as much as template classes.
+
+Why not?
+

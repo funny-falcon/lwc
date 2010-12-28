@@ -1,0 +1,103 @@
+
+This extension is not related to the ``lightweight c++
+programming language''. It is useful to those who want
+to distribute the generated C code to be compiled in
+systems without lwc.  Additionally, this can be simplified
+when/if lwc starts doing its own C preprocessing and does
+not depend on 'cpp'.
+
+
+
+Making the lwc output portable
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  lwc is really a preprocessor.  The stantard processing
+when compiling lwc code is these steps:
+
+  1. C preprocessing: include headers, expand macros
+  2. lwc preprocessing: produce C code
+  3. C compiler: make the executable
+
+  The C code however is not very portable.
+
+  The problem is that header files may contain different
+values/declarations in different systems.  For example,
+an unfortunate situation would be:
+
+	#include <stdio.h>
+
+	int main ()
+	{
+		int fd = open ("file", O_RDONLY);
+		...
+	}
+
+O_RDONLY is a value found in the stdio.h.  Suppose that in
+a linux system the value of O_RDONLY is 0, in a AIX system
+this value is 1 and in a Microsoft Windows XP system this
+value is 2.  If this sample program is preprocessed with lwc
+in a linux system and then distributed and somebody with an
+AIX system wants to compile the C code, they are in serious
+trouble!  The value 0 which in the linux environment stands
+for read-only, in the AIX environment may stand for 'truncate
+and write'!
+
+Solution: transparent headers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  The first solution to this is the ``extern "header.h"''
+declaration, like below:
+
+	extern "stdio.h" {
+	#include <stdio.h>
+	}
+
+When the lwc preprocessor sees this, it will take what it
+needs from the stdio header (function prototypes, typedefs,
+enums), but it will not output any of these.  Instead it
+will re-emit an "#include <stdio.h>" line in the output.
+
+As a result, the generated code is not considered preprocessed
+C any more.  So it must not end in a '.i' extension, it should
+end in a '.c' extension.
+
+This solves the issues with the problematic case if O_RDONLY is
+an enum: since the declaration of the enum which contains O_RDONLY
+is not emitted, and therefore it will be when the C compiler
+does its job.
+
+Another consequence of extern "", is that structures are passed
+by value in function arguments.  The general statement
+extern "C", will not re-include a file "C".  It will just enable
+the structure-by-value flag.
+
+
+#defined values
+~~~~~~~~~~~~~~~
+
+If, however, O_RDONLY is a value that was #defined in stdio,
+the C preprocessor at the stage (1), will replace O_RDONLY with
+the value.  To avoid that a dollar sign '$' can be placed in
+front of the name.  Using dollars, the portable code is:
+
+	extern "stdio.h" {
+	#include <stdio.h>
+	}
+
+	int main ()
+	{
+		int fd = open ("file", $O_RDONLY);
+		...
+	}
+
+The C preprocessor at stage (1), knows it must replace
+'O_RDONLY' with a value. However, '$O_RDONLY' escapes the
+substitution.  The lwc preprocessor, when it sees something
+with a dollar sign in front of it, it will remove the
+dollar sign and consider the identifier a value of type
+'int'.  When stdio is re-included in stage (3), O_RDONLY
+will be replaced by the value.
+
+
+-There is still more to do with conditional compilation-
+

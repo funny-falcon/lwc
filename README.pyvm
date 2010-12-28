@@ -1,0 +1,18 @@
+lwc was made around 2003 as a general purpose C++ replacement for
+ambitious hackers.  Apparently it has servered its goal which was
+the pyvm program.
+
+Many of the 'general purpose' features of the language are not used
+in pyvm and since pyvm has become The Testcase of the language, the
+other features aren't tested, there is no guarantee that they work
+and their reference in the documentation should better be ingored.
+
+pyvm users'd better completely ignore this directory to avoid needless
+head explosion.
+
+Hackers are suggested to ignore the documentation (because it is
+not always up to date) and look up specific features of the language
+only when there is need for it.  In fact it's much better to just
+ask.
+
+lwc has become testcase-driven software...

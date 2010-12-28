@@ -1,0 +1,85 @@
+
+(*no need to read this unless you use virtual inheritance*)
+
+Virtual Inheritance Declarations
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  If a class has derrived classes, it doesn't care.  It's the same to it
+if it has 0, 1 or many derrived classes.  For virtual inheritance though,
+this information is important to a class: virtual downcast data are
+in a way part of the object's data (actually part of the object's virtual
+table's data).  This means that typically, all files must agree on all the
+virtually derrived classes of a base class.  An example:
+
+	/************************/
+	# file1.c
+
+	class A {
+		int x;
+	};
+
+	/***********************/
+	#file2.c
+
+	class A {
+		int x;
+	};
+
+	class B : virtual A {
+	};
+
+	/************************/
+	# file3.c
+
+	class A {
+		int x;
+	};
+
+	class C : virtual A {
+	};
+
+	class D : virtual A {
+	};
+
+Here, in file1.c it is assumed that A has no virtually derrived classes.
+file2 thinks that A has one virtually derrived class, B.
+file3 thinks that A has two virtually derrived classes, C and D.
+This is a problem because eventually these files see different declarations
+of class A and they have a different perception for the virtual table
+structure of class A.  C++ solves this with the complex mechanism of dynamic_cast.
+
+C traditionally prefers the approach of common declarations (header files).
+This specific case is different as a C++ compiler will have to collect all
+these virtual inheritance information during linking and construct the
+downcast data for the dynamic_cast operator. (i think - correct me)
+
+  In lwc currently, a more lightweight approach is implemented in order to
+have virtually derrived classes in different files: virtual inheritance
+declarations.  During the declaration of a class, it is possible to declare
+all the classes that will virtually inherit this class.  For example:
+
+	class A {
+		int x;
+		virtual class B, C, D;
+	};
+
+With the use of "virtual class" keywords, the lwc compiler knows that it will
+have to allocate 3 slots in the virtual table to store downcast offsets for
+objects B, C and D.  Then all files that see this prototype will agree on the
+declaration of class A and its virtual table structure.  This has the advantage
+moreover that it's more efficient than dynamic_cast.
+
+If virtual inheritance declarations exist for a class and a class that was not
+declared is virtually derrived it is considered an error.  On the other hand,
+if a class was declared in virtual inheritance declarations, but that never
+really happened, it is ok.  You will just have an unused slot in the virtual
+table.
+
+  With the _lwc_config_ option "virtual_inheritance_declarations" these
+declarations become obligatory.  It is suggested to always use virtual
+inheritance declarations.  It is left optional for compatibility with older
+programs and attempts to convert C++ to lwc.  However, if virtual
+inheritance declarations are not used, you must make sure that all files see
+the same virtually derrived classes or you will probably have -hard to debug-
+runtime errors and unpredictable behaviour.
+

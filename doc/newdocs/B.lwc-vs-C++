@@ -1,0 +1,151 @@
+Differences between C++ and lwc -- most of them
+
+
+A. C++ features not present in lwc
+==================================
+
+1. Access control (public, private, protected, friend) in classes
+   is absent. Everything is accessible.
+
+2. The scope operator '::' is not there. In lwc we have the
+   dot '.' for declarations that would require '::'.
+   In order to access specific members of parent classes
+   (casts) are used. Example:
+		class A {
+			virtual int f ();
+		};
+		class B : A {
+			int f () {
+				((A*)this)->f ();
+			}
+		};
+
+3. No initialization lists in constructors.
+   Constructors can be called at any time with "ctor()",
+   so calling ctors of parent classes does not require a section
+   where expressions are interpreted differently.
+
+3b. In constructors, virtual calls, are still virtual.
+   In C++ in a constructor calls always call the current
+   type's function as if the object type was known.
+
+4. Destructors do not automatically call destructors of
+   parent classes. This is generally cofused in C++.
+   Constructors of Base not automagically called when
+   constructing Derrived objects.
+
+4b. Also, in the case below, no destructor is called at all!
+	class A { ~A() {} };
+	class B : A { };
+	int f ()
+	{
+		B b;
+	}
+   because 'B' doesn't have a destructor. Also, as a consequence
+   of this, where C++ would require 'virtual destructors' to do
+   proper deletion without crashes, lwc'd better have 'auto virtual
+   destructors'. 
+
+5a. Exceptions do not throw types. Exceptions in lwc can
+   be identified by a simple integer value.
+
+5b. Exceptions can't call the destructors of local objects
+   while unwinding the stack. Plain C can't help us implementing
+   that. We need compiler support (EH frame).
+
+5c. type_id NOT PRESENT (virtual variables are the general case
+   of it).
+
+6. Templates not implemented. Generic programming can be
+   alternativelly implemented with lwc's "template classes".
+   STL is not there.
+
+6b. No template functions.
+
+7. Virtual inheritance accross different files does not work
+   without "virtual inheritance declarations": All files must
+   agree that a class has the same virtually derrived classes.
+
+8. Operator overloading casts not implemented.
+
+9. If a function returns an object which is passed as a tmp
+   to another function (common case in operator overloading),
+   the destructor of the temporary object is never called!!
+
+10. unions may have data members only. They can only be PODs.
+
+11. C++ casts are absent (static, reinterpret, dynamic, const).
+
+12. 'mutable' not present.
+
+13. Pointer to member, etc, not implemented.
+
+14. The virtual table ABI is much different. lwc's vtable
+   ABI results in faster code.
+
+15. At the moment, classes with virtual parents are not
+  position independent.
+
+16. lwc can call plain C functions without 'extern "C"'.
+  plain C code can call lwc functions (but not overloaded ones).
+
+16a. lwc in a way resurrects 'overload'. lwc invokes mangled overloading
+  function names if it sees more than one declaration for a function.
+  A problematic case in lwc is:
+	# file1.c
+	void foo () { }
+	# file2.c
+	void foo ();
+	void foo (int);
+	void bar () { foo (); }
+  where in file1 foo is not an overloaded function while in file2 it is.
+
+17. 'enum' is really an 'int' and it is not possible to overload
+  functions based on different enum type arguments. enums in lwc
+  are just 'generators of constants', as in C.
+
+17b. Same applies to 'bool'. 'bool' in lwc is a synonym for 'int'
+
+18. new and delete can't be used to allocate non-classes.
+  new and delete are compatible with malloc() and free().
+
+19. Namespaces are not implemented. Nor is the 'using' keyword.
+
+20. Static class members not implemented. static class members
+   only make sense with access control to 'hide' a global variable.
+   In lwc, "virtual variables" do the right thing.
+
+21. consts can't be used as array initializers, for example.
+	const int X = 12;
+	int A [X];
+    generates C as it is, and it is invalid in C.
+
+22. Destructors of global objects not called at exit (yet).
+
+23. Inheritance and function overloading has slightly different rules.
+  In C++ the code:
+	class A {
+		int foo (int);
+		int foo (char*);
+	};
+	class B : A {
+		int foo (int);
+		int bar () {
+			foo ("Hi mom!");
+		}
+	};
+   does not work!!!
+   In lwc it works and calls the foo(char*) function!
+   But in general, function overloading is very primitive in lwc except
+   from this design decission.
+
+24. goto and destruction of local objects don't cooperate.
+  Goto is considered harmful unless you are an expert. So experts
+  can adjust their destruction of locals manually.
+
+25. No generalized 'assignment is construction' declarations.
+  This is not possible in lwc:
+	int i (34);
+
+26. No trigraphs :(((((
+

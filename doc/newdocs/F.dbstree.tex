@@ -1,0 +1,378 @@
+\documentclass[twocolumn]{article}
+
+\title{The Dynamic Binary search tree}
+\author{}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+Binary trees are an important data organization in which searching for
+an element is performed in $O(\log{n})$ steps. Dynamic trees were new
+elements can be added and removed may become unbalanced and thus more
+sophisticated binary tree implementations have been suggested to keep
+the tree in $O(\log{n})$ limits.
+
+Our goal is controlling the height of a tree to small values. A balanced
+tree fulfills this goal but a tree need not necessarily be balanced to have
+its height controlled.
+
+The algorithm for an efficient implementation of dynamic tree is described,
+along with comparisons with existing dynamic tree implementations.
+
+\section{Description of the tree}
+
+The basic idea is using a simple binary search tree and setting a limit on
+it's height. Let us use for the rest of this study the number 32 as height
+limit. This restricts the total number of nodes to no more than $2^{32}$ as
+long as duplicate elements are not allowed.
+We should notice that due to the logarithmic nature of complexity,
+in real-life applications a balanced tree will never reach such values for
+it's height.
+
+Supposing we can efficiently fulfill this condition, locating an element in
+the tree will be performed in no more than 32 steps. Typically
+$O(32)<O(\log{n})$. Actually it may result in a few more steps.
+In practice it is an unimportant
+difference and therefore it is as fast as any balanced tree.
+
+Removing an element from the tree can be easily done without the necessity
+of a balancing operation as long as by removing an element the
+height of the tree is not increased. This condition can be implemented.
+
+If the node to be removed has two child nodes then the procedure is to find
+the biggest element from the smaller ones or the smallest from the bigger
+ones and replace the node to be removed with this element. A sample code is
+illustrated in \ref{app:rmv}
+
+Adding a new element to the tree is the most important operation. While
+inserting the element the number of comparisons performed is counted. The
+simple rule, when this number reaches 32 the tree must be rebalanced, is
+very efficient.
+
+Balancing the tree is accomplished in $n$ steps. However, the frequency at
+which the tree needs to be balanced again is a function of $\frac{1}{2^n}$.
+As a result adding a new element is in the great majority of the cases done
+in less than 32 steps; but rebalancing is more rare as the number of nodes
+increases
+\footnote{A wosre-case behavior were a lot of elements have to be inserted
+in an empty tree and they arrive sorted is solved in \ref{init}}.
+
+\subsection{Balancing the tree}
+
+The binary tree can be entirely reconstructed in $n$ steps using a simple
+algorithm. First, an array of $n$ pointers is allocated an all the elements
+of the tree are placed in this array in sorted order. Let us remember than an
+always-balanced tree implementation requires extra memory for the node
+structures and therefore the extra allocation of the array is yet efficient;
+furthermore, in modern multithreaded database systems an operation which
+alters part of the data is given full control of the hardware and the memory
+usage burst will in this case be safely performed.
+
+The next step is to reset the root of the tree and start inserting elements
+in the order at which they will result in a perfectly balanced tree. This is
+done by first inserting the middle element $N/2$ of the array, then
+elements $N/4$ and $3 N / 4$, then $N/8$, $3 N / 8$, $5 N / 8 \ldots$
+and so on.
+
+By this procedure $2^k - 1$ where $k$ the integer for which
+$2^k \leq N < 2^{k + 1}$ nodes can be inserted. For the remaining $N-(2^k -1)$
+nodes, if any, various algorithms of $O(n)$ steps can be applied. One way
+that is used in the sample code is to proceed normally as if there were
+$2^{k+1}$ nodes and exclude the elements $i$ for which the modulo of the
+division $i * 2^k / N$ is greater or equal to $N-(2^k -1)$ or zero; in other
+words excluding those numbers $a$ for which there is a number $b$ so that
+\begin{equation}
+\left\lfloor \frac{a N}{2^{k+1}} \right\rfloor =
+\left\lfloor \frac{b N}{2^k} \right\rfloor
+\: , \;\; 0 < b < 2^k
+\end{equation}
+
+The complexity of the above algorithm will be linear if when inserting nodes
+in the new tree redundant comparisons are avoided.
+
+A sample implementation is provided at \ref{code:balance}.
+
+\section{Characteristics of the tree}
+
+The main feature of the this tree is that after is has been balanced, the
+more nodes it contains, the more new elements be distributed in external
+nodes and thus it will be much more unlikely to become ``unbalanced''.
+
+\begin{itemize}
+\item
+   Memory requirements for this tree are minimal. The standard memory needed
+   is as much as any simple binary tree and the same as a double linked
+   list. Memory usage bursts occur when
+   balancing is performed but this is generally a rare and very fast action.
+   Memory due to recursion is not trivial since tree height is limited
+   to 32.
+\item
+   Locating elements will happen in less than 32 steps. Generally after
+   balancing has been performed locating elements is a matter of $\log{n}$.
+\item
+   Removing elements is also a matter of less than 32 steps.
+   However, there are no rotations performed and therefore removing an
+   element is possibly performed faster than in an always-balanced tree.
+\item
+   Adding elements in most of the cases is a matter of less than 32 very
+   fast steps.
+   Balancing is rare and becomes even more rare as the tree grows and it
+   requires $n$ simple steps.
+
+   In long term performance, for a growing tree the number of nodes $n$
+   divided with the number of steps spent for balancing, tends to be
+   independent of $n$.
+\end{itemize}
+
+Tests have shown that the tree will need to balance 2 times for
+1,000,000 elements arriving in random order, once after 20,000 elements
+and once again at about 400,000.
+
+\section{Database initialization}
+\label{init}
+
+One case were the suggested tree would prove inefficient is inserting a lot
+of elements in sorted order in an \emph{empty} tree.
+If the tree is not empty and has been balanced before then the arriving
+elements will be distributed on the external nodes.
+
+This is a case which would occur when initially loading the data from
+storage devices. The workaround to this problem is similar to the way the
+tree is balanced. The -sorted- elements will have to be inserted in the tree
+in the order that they will make a balanced tree, first the middle element,
+$N/4$, $3*N/4$ and so on.
+
+Once a perfectly balance tree is constructed there should be no worry for
+this worse-case occurring unless most of the elements are removed.
+
+Generally, in cases were a long sequence of elements is to be inserted
+in the tree, if the tree has few nodes it may be preferable to sort the
+sequence of elements and then insert the right elements first.
+This procedure is worth the tradeoff if the arriving elements are almost
+sorted, and in this case special sorting algorithms can be applied.
+
+Another solution is to make the elements really random, by using a random
+tree. In a \emph{random tree}, the comparison of elements is heads or tails.
+After the sequence of elements has been inserted in a random tree (which
+will never be unbalanced), they can be read in-order and sent to the dbs
+tree.
+
+\section{Conclusions}
+
+The tree structure with the characteristics that have been presented is
+efficient for specific database requirements.
+
+When the database is idle or the specific tree is not used, is consumes the
+least memory compared to other balanced tree structures.
+That is the primary reason for the design of this structure.
+
+When the tree is just accessed for locating an element this is as fast as
+any balanced tree.
+
+Theoretically, balanced tree implementations which perform rotations after
+a node is inserted or removed from the tree are better. In practice, and
+more specificly in a database environment limiting the height of the tree to
+a `small' number is more than adequate.
+Except from memory efficiency, the suggested tree structure may possibly
+behave faster as well; the worse case scenario will either occur at the
+initialization of the database or else is can be easilly prevented.
+
+\onecolumn
+\section{Sample code}
+
+A sample implementation in C of the presented tree is provided.
+For the sample code the simple definition of a node with a pointer to
+data is used. The function {\tt compare ()} is the application-specific
+function which compares the data of two nodes.
+
+\begin{verbatim}
+#define MAX_HEIGHT 32
+typedef struct tnode node;
+struct tnode {
+   char *data;
+   node *less, *more;
+};
+node *root;
+\end{verbatim}
+
+\subsection{Removing a node}
+\label{app:rmv}
+
+When removing an element which has two children,
+both the smallest from the bigger elements and the
+biggest from the smaller elements are located. By convention the deepest one
+is selected to replace the node to be removed.
+
+\begin{verbatim}
+void remove (node *n)
+{
+    node *np, *nl, *nr, *nlp, *nrp;
+    int isroot;
+
+    if (!(isroot = (np = root) == n))
+        for (;;)
+            if (compare (np->data, n->data) > 0)
+                if (np->less == n) break;
+                else np = np->less;
+            else
+                if (np->more == n) break;
+                else np = np->more;
+
+    if (!(n->less && n->more))
+    {
+        if (isroot) root = (n->less) ? n->less : n->more;
+        else
+            if (np->less == n) np->less = (n->less) ? n->less : n->more;
+            else np->more = (n->less) ? n->less : n->more;
+        return;
+    }
+    for (i = 0, nlp = NULL, nl = n->less; nl->more; i++)
+        nlp = nl, nl = nl->more;
+    for (j = 0, nrp = NULL, nr = n->more; nr->less; j++)
+        nrp = nr, nr = nr->less;
+    if (i >= j)
+    {
+        if (isroot) root = nl;
+        else
+            if (np->less == n) np->less = nl;
+            else               np->more = nl;
+        if (nlp)
+        {
+             nlp->more = nl->less
+             nl->less = n->less;
+        }
+        nl->more = n->more;
+    } else {
+        if (isroot) root = nr;
+        else
+            if (np->less == n) np->less = nr;
+            else               np->more = nr;
+        if (nrp)
+        {
+            nrp->less = nr->more
+            nr->more = n->more;
+        }
+        nr->less = n->less;
+    }
+}
+\end{verbatim}
+
+\subsection{Balancing}
+\label{code:balance}
+
+The algorithm for reconstructing a balanced tree.
+{\tt alloca} is a stack allocation mechanism.
+
+Special care should be taken that the variables {\tt i, j, D, k} in
+{\tt balance()} are 64 bit integers. If not then the algorithm will fail for
+trees with more than about 65000 nodes.
+
+\begin{verbatim}
+unsigned int suint;
+node **snpp;
+
+void count_nodes (node *n)
+{
+    ++suint;
+    if (n->less) count_nodes (n->less);
+    if (n->more) count_nodes (n->more);
+}
+void tree_to_array (node *n)
+{
+    if (!n) return;
+    tree_to_array (n->less);
+    *snpp++ = n;
+    tree_to_array (n->more);
+}
+void balance ()
+{
+    node **npp;
+    long int i, j, D, k, k2, k3;
+
+    /** Generate a sorted array **/
+    suint = 0;
+    count_nodes (root);
+    npp = snpp = (node**) alloca (sizeof (node*) * suint);
+    tree_to_array (root);
+    /** Insert the top 2^k -1 nodes **/
+    root = npp [suint / 2];
+    for (i = 4; i <= suint + 1; i *= 2)
+        for (j = 2; j < i; j += 4)
+        {
+            k2 = suint * j / i;
+            npp [k2]->less = npp [suint * (j - 1) / i];
+            npp [k2]->more = npp [suint * (j + 1) / i];
+        }
+    /** Test whether there are nodes left **/
+    if ((k = suint + 1 - i / 2)) == 0)
+    {
+        for (i /= 2, j = 1; j < i; j += 2)
+            k2 = suint * j / i,
+            npp [k2]->less = npp [k2]->more = NULL;
+        return;
+    }
+    /** Proceed normally but for specific nodes **/
+    for (j = 2; j < i; j += 4)
+    {
+        k3 = suint * j / i;
+        D = (k2 = suint * (j - 1) / i) * (i / 2) % suint;
+        if (D >= k || D == 0)    /* k2 Excluded */
+            npp [k3]->less = NULL;
+        else {                   /* k2 Inserted */
+            npp [k3]->less = npp [k2];
+            npp [k2]->less = npp [k2]->more = NULL;
+        }
+        D = (k2 = suint * (j + 1) / i) * (i / 2) % suint;
+        if (D >= k || D == 0)
+            npp [k3]->more = NULL;
+        else {
+            npp [k3]->more = npp [k2];
+            npp [k2]->less = npp [k2]->more = NULL;
+        }
+    }
+    insert (npp [0]);
+}
+\end{verbatim}
+
+\subsection{Inserting a node}
+
+The procedure is similar to that of a simple binary search tree.
+
+\begin{verbatim}
+int insert (node *n)
+{
+    node *np;
+    int h;
+
+    n->less = n->more = NULL;
+    if (!(np = root))
+    {
+        root = n;
+        return 0;
+    }
+    for (h = 0;; h++)
+        if (compare (np->data, n->data) > 0)
+            if (!np->less) { np->less = n; break; }
+            else np = np->less;
+        else
+            if (!np->more) { np->more = n; break; }
+            else np = np->more;
+     if (h == MAX_HEIGHT)
+     {
+         balance ();
+         return 0;
+     } else if (h > MAX_HEIGHT) {
+         // If that ever happens please send me a mail and I'll send
+         // you 10.000$ for having a tree with 4bill nodes
+         // or make MAX_HEIGHT 34 and go to 16bills
+         printf ("Tree full. Reached 2^%i nodes\n", MAX_HEIGHT);
+         return -1;
+     }
+     return h;
+}
+\end{verbatim}
+
+\end{document}

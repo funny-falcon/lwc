@@ -1,0 +1,81 @@
+
+constructing arrays of objects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Initialization lists for arrays of objects with constructors,
+have an alternative meaning in lwc and they're used to call the
+constructor for each element of the array.
+
+For an object 'A' with constructor, the declaration
+
+	A x [] = { E1, E2, E3 }
+
+will call:
+
+	x[0].ctor (E1);
+
+if E1 is not enclosed in parentheses, or
+
+	x[0].ctor E1;
+
+if it is, or
+
+	x [0] E1
+
+if E1 starts with a '.'
+Same for x[1] and x[2].
+
+If the size of the array is specified, then lwc will call
+the ctor with no arguments for the remaining elements. For example in:
+
+	A y [10] = { };
+
+lwc will produce:
+
+	y[0].ctor();
+	y[1].ctor();
+	...
+	y[9].ctor();
+
+
+The feature will be avoided if lwc detects nested braces in the initializer.
+
+An example with all the possible cases:
+
+	class A {
+		int i, j;
+		A ()	{ i = j = 0; }
+		A (int x)	{ i = j = x; }
+		A (int x, int y)	{ i = x, j = y; }
+		void altctor (int x)	{ j = -(i = x); }
+	};
+
+	int f ()
+	{
+		A a [7] = {
+			1, 		//  a[0].ctor (1)
+			(1),		//  a[1].ctor (1)
+			(1,2),		//  a[2].ctor (1, 2)
+			(),		//  a[3].ctor ()
+			.altctor (3)	//  a[4].altctor (3)
+					//  a[5].ctor(), a[6].ctor()
+		};
+
+		// Not done. Nested braces. Remains as is
+		A b [] = { { 1, 2 }, { 3, 4 } };
+	}
+
+The feature, normally should work for 'new' and 'localloc'. And it is.
+The syntax is that the initializer must follow the array brackets. Example:
+
+	int f ()
+	{
+		A *p1 = new A [] { 1, 2, 3, altctor (123) };
+		A *p2 = localloc A [12] { };
+		A *p3 = new A [5] { (1, 2), (3, 4) };
+	}
+
+
+*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!
+KNOWN BUG: They are not destructed though !!!!
+*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!*!

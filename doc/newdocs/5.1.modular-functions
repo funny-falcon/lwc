@@ -1,0 +1,63 @@
+
+Modular functions (no this)
+===========================
+
+
+  The declaration qualifier 'modular', can be used to declare
+member functions that do not have "this", and cannot access any
+class member.  So what is the meaning of making a function
+a member if it is not interested in accessing the data of the
+class then ?!?!
+
+
+The one case where modular functions make sense is when they are
+virtual.  They can be used to emulate plain callback functions which
+are attached to the object but, do not indeed, need any data from
+it.  For example:
+
+
+	class StandardFractal {
+		virtual modular bool iszero (float f)
+		{ return fabsf (f) < 0.01f; }
+		void do_calculations ();	// calls iszero
+	};
+
+	class PreciseFractal : StandardFractal {
+		bool iszero (float f)
+		{ return fabsf (f) < 0.0001f; }
+	};
+
+Modular functions are faster to call (one argument less) and the
+progam size is smaller.
+
+A modular function, because it does not have "this" cannot access
+any data members of the class, cannot call other no-modular member
+functions and cannot use anything virtual (variables or functions).
+It can call other modular functions though (but not virtual).
+
+Modular functions can be called without an object instance.
+If you don't have such an instance and still want to call a modular
+function, this can be done with the syntax <class>.<func> ();
+
+Another application of modular functions, is together with
+"auto functions" and the new reserved word "_CLASS_", to
+access virtual variables.  For example:
+
+	class A {
+	virtual int active, allocated, freed;
+	auto modular sum () {
+		return _CLASS_.active + _CLASS_.freed - _CLASS_.allocated;
+		}
+	};
+
+	class B : A {
+	};
+
+	int main ()
+	{
+		int total = A.sum () + B.sum ();
+	}
+
+Finally, a modular function which is neither virtual or auto, is
+possible but little useful.  It could be used to emulate c++ namespaces
+or something.

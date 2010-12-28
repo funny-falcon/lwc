@@ -1,0 +1,145 @@
+
+new stuff of lwc 1.0
+********************
+
+Also in 1.0: regular expressions and ctors of arrays
+
+1. Postfix functional operator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  'postfix' is a reserved word.  The syntax of 'postfix' is
+like a function and it has the effect that: arguments are
+evaluated from left to right, the return value is the leftmost
+argument (the first one evaluated).  So postfix can remember
+for us.  For example:
+
+	// the same as x++
+	postfix (x, x += 1);
+
+	// typical useful case
+	p = postfix (p->next, free (p));
+	// .. or if ~ is overloaded to call free() on pointers
+	p = postfix (p->next, ~p);
+
+	// increment y by 23 after using the value
+	postfix (foo (y), y += 23);
+	// or
+	foo (postfix (y, y += 23));
+
+	// do cleanups 
+	return postfix (do_calculate (buffer), free (buffer), release_semaphore ());
+
+	// put new value
+	x = postfix (strdup (y), free (x));
+
+	// the result is x,
+	postfix (postfix (x, x -= 10), z [x] = 0);
+
+	// the result is B
+	postfix ((A, B), (C, D));
+
+Generally, postfix is a very cool thing and opens a whole
+new chapter of possibilities in C expressions and statements.
+
+
+2. Escape raw strings
+~~~~~~~~~~~~~~~~~~~~~
+
+  This is mainly useful to avoid the backslash nightmares when
+passing regular expression recipes to regexp libraries.
+In order to pass the regexp "\w\s\"\\", we'd have to write
+the string "\\w\\s\\\"\\\\". A nightmare.
+
+String literals where a 'r' is placed right before the opening
+double quote, don't have this problem since the lwc preprocessors
+will escape all backslashes in them.  For example:
+
+	char msg [] = r"\w\s\"\\";
+
+will be converted by lwc to:
+
+	char msg [] = "\\w\\s\\\"\\\\";
+
+and after the C compiler sees it, will be converted back to "\w\s\"\\"
+
+
+3. Single quoted strings
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+ Because single quotes are fun, it's possible to have string literals
+in single quotes.  The way to distinguish between a string and a character
+constant is the number of letters.  Single-quoted strings must have more
+than 4 characters. Example:
+
+	char msg [] = 'Hello World!';
+	char x [] = '"What do you want?", said Elwood';
+	char y [] = 'a';	// WRONG!! 'a' remains 'a'
+
+
+4. References
+~~~~~~~~~~~~~
+
+ References have been implemented and can be applied on global and local
+variables, structure members, function arguments and virtual variables.
+References are "pointers in disguise", they are an alias for a variable.
+Whatever we do on references happens on the variable they're pointing
+to.  For example:
+
+	int foo ()
+	{
+		int i, j;
+		// ri is an 'alias' of i
+		int &ri = i;
+		int &rj = j;
+
+		// same as i = 0
+		ri = 0;
+
+		// same as i++
+		ri++;
+
+		// same as i = j
+		ri = rj;
+	}
+
+  In lwc it is possible to reassign references.  Normally, this is impossible
+-as in C++- because the operations on references always happen for the
+things they're pointing at and references can be set only once at their
+initialization.  Lwc implements a new unary prefix operator called
+'dereference'.  When 'dereference' is applied on an expression, all
+references in it are treated as pointers.  Extending the previous example:
+
+	int foo ()
+	{
+		....
+
+		// make ri point to j
+		dereference (ri) = &j;
+
+		// assign reference to reference
+		dereference (ri = rj);
+		// or same thing
+		dereference ri = dereference rj;
+	}
+
+  The best way to understand all these are by compiling the above code and
+looking at the output. 'dereference' is needed since in lwc we don't have
+C++'s initialization lists at the constructors of objects.  So the only
+way to initialize reference members of objects is with the use of
+dereference in the ctor.
+
+The exception is structure arguments. Because lwc passes all structures
+by reference anyway (and adjust that pointers and objects can be passed),
+declaring references of structures in function arguments, is obsolete,
+untested and will confuse the lwc preprocessor in function overloading.
+
+5. Overloaded operators on 'this'
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+See 4.2-operator-overloading.
+Generally, if for example, the [] operator is overloaded
+for a class, the expression:
+
+ 	this [1];
+
+will invoke operator overloading and not pointer displacement.

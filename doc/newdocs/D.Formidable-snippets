@@ -1,0 +1,158 @@
+
+
+1. Walking A Tree
+~~~~~~~~~~~~~~~~~
+
+Suppose a binary tree.  Each node has two pointers to subtrees, like this
+
+	class Node {
+		Node *less, *more;
+	};
+
+The tree can be a simple binary search tree, a dynamic binary search tree
+with auto-balance (described in dbstree.tex), an integer tree (inttree.tex)
+or any other black-red-whatever tree.  To do something for every node of the
+tree we use a recursive procedure, like below:
+
+	void do_something (Node *n) {
+		if (n->less) do_something (n->less);
+		/* do something with n ... */
+		if (n->more) do_something (n->more);
+	}
+
+And the procedure is initiated by calling 'do_something (root_of_the_tree)'.
+
+Here is the optimum lwc way of walking a tree with auto functions, compile-time
+polymorphism, etc:
+
+	class foreach_node
+	{
+		void Do (Node*) = 0;
+	auto	void walktree (Node*) = 0;
+	auto	void enter (Node*);
+	};
+
+	void foreach_node.enter (Node *n)
+	{
+		if (n) walktree (n);
+	}
+
+	//
+	// do in-order
+	//
+
+	class foreach_node_IO : foreach_node
+	{
+		void walktree (Node*);
+	}
+
+	void foreach_node_IO.walktree (Node *n)
+	{
+		if (n->less) walktree (n->less);
+		Do (n);
+		if (n->more) walktree (n->more);
+	}
+
+	//
+	// do post-order
+	//
+
+	class foreach_node_PO : foreach_node
+	{
+		void walktree (Node*);
+	}
+
+	void foreach_node_PO.walktree (Node *n)
+	{
+		if (n->less) walktree (n->less);
+		if (n->more) walktree (n->more);
+		Do (n);
+	}
+
+Now, suppose we have a tree of strings where the nodes are defined as:
+
+	class NodeStr : Node {
+		char *str;
+	};
+
+-A] If we want to walk the tree and print all the strings. We only have to
+define the function 'Do' to print the string of each node. Everything else
+is already arranged by the auto-functions.
+
+	class print_tree : foreach_node_IO
+	{
+		void Do (Node*);
+	   public:
+		print_tree (Node *root)		{ enter (root); }
+	};
+
+	void print_tree.Do (Node *n)
+	{
+		NodeStr *s = (NodeStr*) n;
+		printf ("%s\n", s->str);
+	}
+
+	//
+	// use it on a tree starting at 'root'
+	//
+	int sample_use ()
+	{
+		print_tree (root);
+	}
+
+
+-B] If we want to count all the nodes of a tree, we can:
+
+	class count_nodes : foreach_node_IO
+	{
+		void Do (Node*);
+	  public:
+		int cnt;
+		count_nodes (Node *root)	{ cnt = 0; enter (root); }
+	};
+
+	void count_nodes.Do (Node*)
+	{
+		cnt++;
+	}
+
+	//
+	// use it on a tree starting at 'root'
+	//
+	int sample_use ()
+	{
+		count_nodes C (root);
+		printf ("tree has %i nodes\n", C.cnt);
+	}
+
+-C] If we've counted the nodes and we want to store all the strings
+in an array, sorted, we can:
+
+	class tree_to_array : foreach_node_IO
+	{
+		void Do (Node*);
+	   public:
+		char **array;
+		tree_to_array (char *a[], Node *root)	{ array = a; enter (root); }
+	};
+
+	void tree_to_array.Do (Node *n)
+	{
+		NodeStr *s = (NodeStr*) n;
+		*array++ = s->str;
+	}
+
+	//
+	// use it on a tree starting at 'root'
+	//
+	int sample_use ()
+	{
+		count_nodes C (root);
+		char *array [C.cnt];
+		tree_to_array A (array, root);
+	}
+
+NOTES: The member functions of the foreach_node class can be 'modular' in
+some cases. In case (A), Do() does not use 'this'. Making functions modular
+will avoid passing the extra argument in walktree() which can't be inlined
+due to recursion.

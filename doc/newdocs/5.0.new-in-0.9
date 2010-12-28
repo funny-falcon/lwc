@@ -1,0 +1,143 @@
+
+lwc version 0.9: new stuff
+**************************
+
+External docs present the "modular functions" and the new
+neat optimization lwc does in object hierarchies.
+
+0. _CLASS_ keyword
+==================
+
+  The keyword _CLASS_ can appear wherever a base type is
+expected and will be replaced by the name of the class of
+the current class scope.  This is useful in macros and auto
+functions.  Template classes can use their type and don't
+need _CLASS_ very much.   An auto function that references
+_CLASS_ is always redefined.
+
+	class A {
+		int i;
+		A (A a)		{ i = a.i; }
+
+	auto virtual A *clone () {
+			return new _CLASS_ (*this);
+		}
+	};
+
+	class B : A{
+		int j;
+		B (B b)		{ j = b.j; ((A*)this)->ctor (b); }
+	};
+
+
+1. Alternative constructors
+===========================
+
+  Sometimes, we have two possible initialization functions
+and both can be used in the object construction.  Chosing which
+one is a problem.  In lwc it is possible to select a specific
+member function to be used to initialize the object instead of
+the default constructor, by placing the function's name in
+the declaration. For example:
+
+	class A {
+		int i;
+		A (int _i)	{ i = _i; }
+		void ctor2 (int _i)	{ i = -_i; }
+	};
+
+	int f ()
+	{
+		A a1 (12);
+		A a2 ctor2 (12);	// will call ctor2 instead of the
+					// default constructor
+		new A ctor2 (24);
+	}
+
+This is symetric to the feature of lwc that a constructor can be
+called at any time as a function with "ctor()".  Choosing any function
+to be called instead of the default constructor in initialization
+is the other thing.
+
+In C++ the way to counterpart this is with the use of functions
+that have the Return Value Optimization feature.
+
+For the anonymous-object-calls-constructor, the underscore has been
+introduced as a special name to instruct the lwc compiler to
+use the alternative constructor on an anonymous object:
+
+	int f ()
+	{
+		A (12);
+		A _ ctor2 (12);
+	}
+
+
+2. Overloading -> operator
+==========================
+
+As in c++, overloading operator -> has the effect that:
+
+	a->x;
+becomes:
+	(a.operator_pointsat ())->x;
+
+For example:
+
+	struct S { int i; };
+	class A {
+		S *s;
+		S *operator -> ()	{ return s; }
+	};
+	int main () {
+		A a;
+		a->i = 12;
+	}
+
+Operator overloading for this one happens ONLY when the
+base object is an object and not a pointer. If a pointer
+normal pointer indirection will happen.  So -> goes to
+the "very unsafe" operators.
+
+3. linkonce data
+================
+
+  The storage class specifier 'linkonce' can be applied to
+data definitions.  Something declared linkonce can appear
+in multiple object files and the linker will collapse all
+these sections.  As a result it is possible to declare data
+in header files:
+
+	# global.h
+
+	linkonce struct {
+		bool opt1, opt2;
+		int c;
+	} options;
+
+
+Another application is static local variables of static inline
+functions (what are member function definitions inside the class).
+The problem with those is that, because static, the static local
+variable is different in each file.  So the right way is:
+
+	class A {
+		int wrong () {
+			static int i;
+		}
+		int right () {
+			static linkonce int i;
+		}
+	};
+
+The right version should be used if the declaration of 'A' is seen
+by many files.  Unfortunatelly, gcc 3.2 does not produce correct
+code for it and your program will crash!!!  So be careful in the
+case you have inline member functions and static local variables.
+
+
+4. Template specialization
+==========================
+
+see 4.3.generic-programming
+

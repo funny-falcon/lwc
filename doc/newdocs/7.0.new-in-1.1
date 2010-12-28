@@ -1,0 +1,79 @@
+
+lwc 1.1
+~~~~~~~
+
+1. enum name strings
+~~~~~~~~~~~~~~~~~~~~
+
+  lwc can generate strings for enumeration constants with __enumstr__.
+The syntax is:
+
+	__enumstr__ (ENUM_TAG, value)
+
+For example
+
+	enum FOO {
+		A, B, C
+	};
+
+	void f (int v)
+	{
+		printf ("%s", __enumstr__ (FOO, v));
+	}
+
+will print "A", "B", "C" or "(nil)" depending on the value of v.
+That's only interesting for debugging and reporting enum values
+without having to make this conversion by hand looking at the code
+if a debugger is not present.
+
+
+2. expression initialization of objects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Objects initialized with single expressions, are turned to ctor
+calls.  The only exception is that when the type of the initialization
+expression is an object of the same type with the object being declared, and
+a copy ctor is not present. Example:
+
+	class A {
+		ctor (int);
+	};
+
+	class B {
+		ctor (int);
+		ctor (B);
+	};
+
+	int main ()
+	{
+		A x = 12;	// call x.ctor (12);
+		A y = x;	// as is
+
+		B xx = 1;	// xx.ctor (1);
+		B yy = xx;	// yy.ctor (xx);
+	}
+
+
+3. anonymous struct objets
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Like unions, it's possible to access members directly:
+
+	struct A {
+		union {
+			struct {
+				char cmd;
+				char arg1;
+				short int arg2;
+			} __attribute__ ((packed));
+			unsigned int i;
+		};
+	};
+
+	int f ()
+	{
+		A a;
+		a.cmd = 0;
+		a.arg1 = 12;
+		a.i = 0;
+	}

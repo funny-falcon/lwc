@@ -1,0 +1,159 @@
+
+new stuff in lwc 1.2
+====================
+
+
+0. Changed '(operator)' to '->operator'
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+See 4.2.operator-overloading.
+This should only interest people who have already written lwc code
+using the old syntax.
+
+
+1. Destruction through stack unwind
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  This is achieved with the introduction of a new declaration specifier (and
+also a reserved word), '__unwind__'. Presented in 3.2.exceptions
+
+
+2. Pure non-virtuals
+~~~~~~~~~~~~~~~~~~~~
+
+  Useful as a hint to auto-functions to emit no code. Presented in
+3.1.auto-functions
+
+
+3. Long break and continue
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  break and continue may be followed by a small integer number. This number
+denotes how many loop bodies will the control break out of.  For example:
+
+	int f ()
+	{
+		for (;;)
+			for (;;)
+				break 2;
+	}
+
+will break out of both loops and has *almost* the same effect as:
+
+	int f ()
+	{
+		for (;;)
+			for (;;)
+				goto out;
+	out:
+	}
+
+
+It's not that we hate 'goto'.  On the contrary; many lwc developers feel
+that goto is a wonderful thing.  The problem is that the lwc preprocessor
+does not work around goto and destruction of local objects.
+Long break and long continue will make sure that all the nested local
+objects will be properly destructed.
+
+That can be seen in:
+
+	class A { ~A(){} };
+
+	int f ()
+	{
+		A a1;
+		for (;;) {
+			A a2;
+			for (;;) {
+				A a3;
+				if (1) {
+					A a4;
+					break 2;
+				}
+			}
+		}
+	}
+
+4. Calling parent's functions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Since lwc doesn't have C++'s scope operator (::), we used casts to call
+specific functions from parent classes.  This worked but it had a lot of
+typing.  Now it's possible to use the syntax 'class.func()'.  For example:
+
+	class A {
+		A () {}
+		int i;
+	};
+
+	class B {
+		B () {}
+		int j;
+	};
+
+	class C : A, B {
+		C () {
+			A.ctor ();
+			B.ctor ();
+		}
+	};
+
+This only happens inside other member functions, for classes that are parent
+and only for functions.
+
+5. Modular data members
+~~~~~~~~~~~~~~~~~~~~~~~
+
+  Data class members declared 'modular' are exactly the same as C++'s
+'static' data members: they are global data in reallity.  This is just a
+decorative feature but it completes the 'modular functions' feature.
+For example:
+
+	class A {
+	modular int I;
+	};
+
+	int main ()
+	{
+		A.I = 0;
+		A a;
+		a.I;	// same as A.I
+	}
+
+Moreover, if the 'modular' precedes the declaration of a class it is
+not only applied for member functions, but for data members as well.
+Therefore, we can have something like namespaces:
+
+	#define namespace modular class
+
+	namespace FOO {
+		int I;
+		int f ();
+	};
+
+	int FOO.f ()
+	{
+		return I++;
+	}
+
+	int main ()
+	{
+		FOO.I = 0;
+	}
+
+A more extreme example:
+
+	#define namespace modular class
+
+	namespace ZOO
+	{
+		int X [100];
+		int &operator [] (int i)	{ return X [2*i]; }
+	} ZOO;
+
+	int main ()
+	{
+		ZOO [20] = ZOO [30];
+	}
+
+And countless other combinations...

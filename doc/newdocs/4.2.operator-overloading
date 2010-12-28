@@ -1,0 +1,384 @@
+
+Operator Overloading
+====================
+
+operator overloading is fun because it makes programs
+more interesting as it can give new meanings to strange
+symbols (most of which are unused for structures), and
+make your code more cryptic and impressive.  
+
+
+0. Fun example
+~~~~~~~~~~~~~~
+
+In this example we will overload '~' for pointers to
+free the memory and '!!' for strings to print a message
+on stderr.  These two operators are by default invalid
+on pointer operands ('!!' is a new operator of lwc which
+toggles boolean values prefix or postfix. after the introduction
+of the postfix() '!!' is redundant and can be
+used as a free operator for overloading).
+
+	void operator ~ (void *p)
+	{
+		free (p);
+	}
+
+	void operator !! (char *c)
+	{
+		fprintf (stderr, "%s\n", c);
+	}
+
+	int main ()
+	{
+		!! "Hello World!";
+
+		char *x = malloc (100);
+		strcpy (x, "Bye");
+		!!x;
+		~x
+		~(int)x;	// force complement
+	}
+
+
+We can extend this example, overloading the binary comma operator
+to make an experimental and fun output facility subsystem:
+
+	extern "stdio.h" {
+	#include <stdio.h>
+	}
+
+	FILE* operator, (FILE *f, int i)
+	{
+		fprintf (f, "%i", i);
+		return f;
+	}
+
+	FILE* operator, (FILE *f, void *p)
+	{
+		fprintf (f, "%p", p);
+		return f;
+	}
+
+	FILE *operator, (FILE *f, char *s)
+	{
+		fprintf (f, "%s", s);
+		return f;
+	}
+
+	int main ()
+	{
+		int i = 3;
+		char *p = "text";
+
+
+		stdout, "The values are: ", i, " and ", (void*)p, " [", p, "]\n";
+	}
+
+
+________________________
+1. Operators for objects
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+operators for objects can be defined as member functions or
+global functions where the first argument is a structure.
+The difference is that member functions are inherited and
+can be virtual.  Apart from that the two forms are the same.
+
+From the 46 operators of C, 43 do not make sense for structures.
+From these, 26 do not make sense even if the operand is a
+pointer to a structure.  Unlike c++, in lwc operator overloading
+works for structures and *pointers to structures*.
+
+
+1a. Safe operators
+~~~~~~~~~~~~~~~~~~
+
+The operators that make sense only with arithmetic operands are:
+
+	unary: + - ~ !!
+	binary: * / % | ^ & , *= /= %= ^= |= &= << >> <<= >>=
+	postfix: !! ()
+
+Overloading those is safe and the overloaded action will be used
+even if the operands are *pointers to structures*.  For example:
+
+	class A {
+		int i;
+		void operator + ()		{ i = 0; }
+		void operator * (int j);	{ i += j; }
+		void operator () (int x, int y)	{ i = x - y; }
+	};
+
+	int main ()
+	{
+		A a, *ap = &a;
+
+		// on objects
+		+a;
+		a * 1;
+		a (1, 2);
+
+		// on pointers
+		+ap;
+		ap * 1;
+		ap (3, 4);
+	}
+
+In all the cases, the overload functions will be called.
+
+
+1b. Unsafe operators
+~~~~~~~~~~~~~~~~~~~~
+
+The operators below make sense if the operand is a pointer
+to an object and so lwc will not use operator overloading in
+this case. To insist of overloading, the operator function can
+be forced by using "->operator".
+
+	unary: * ++ -- !
+	binary: + - > < >= <= == != && || += -=
+	postfix: ++ --
+
+An example:
+
+	class A {
+		float f;
+		void operator * ()	{ f = 0; }
+		bool operator == (A a)	{ return fabs (a.f - f) < 0.001; }
+		float operator + (float x)	{ return f + x; }
+		int operator + (int x)		{ return f + x; }
+		A operator - (A a)		{ A r; r.f = f - a.f; return r; }
+		A operator + (A a)		{ A r; r.f = f + a.f; return r; }
+	};
+
+	int main ()
+	{
+		A a, *ap = &a, b, *bp = &b;
+
+		// structures
+		*a;		// overload
+		a == b;		// overload
+		a + 1.0;	// overload
+		a + b;		// overload
+		a - b;		// overload
+
+		// pointers
+		*ap;		// default action: pointer indirection
+		ap == bp;	// default action: comparison
+		ap + 1;		// default action: ptr arithmetic
+		ap - bp;	// default action: ptr arithmetic
+
+		// pointers + forced operator
+		->*ap;		// overload
+		ap ->== bp;	// overload
+		ap ->+ 1;	// overload
+		ap ->- bp;	// overload
+
+		// pointers + invalid expressions
+		ap + 1.0;	// overload: makes no sense ptr + float!
+		ap == b;	// overload: makes no sense ptr == obj!
+		ap + bp;	// overload: makes no sense ptr + ptr!
+
+		ap ->+ 1.0;	// overload for both reasons
+	}
+
+As it can be seen, lwc will not use the overloaded function if:
+ the base operand is a pointer && the action is not forced by
+ enclosing the operator in parentheses && the operation is valid.
+
+Whether operations are valid is checked for:
+	+ +=	: valid if other operand  int
+	- -=	: valid if other operand  int or ptr
+	== !=
+	<= >=
+	> <	: valid if other operand  not float and not structure
+	&& ||	: always valid unless other operand a structure
+
+
+1.c Postfix ++ -- !!		(new in lwc 1.1)
+~~~~~~~~~~~~~~~~~~~~
+
+The keyword 'postfix' must be used after 'operator'. Example:
+
+	class A {
+		int i;
+		int operator ++ ()		{ return ++i; }
+		int operator postfix ++ ()	{ return i++; }
+	};
+
+	int f ()
+	{
+		A a;
+		a++;
+		++a;
+	}
+
+1.d Array operator
+~~~~~~~~~~~~~~~~~~
+
+This is also an unsafe operator as the 1b section.  What is special
+is how to force operator overloading on the operator.
+
+	class A {
+		float f [100];
+		float &operator [] (int i)	{ return f [i]; }
+	};
+
+	int main ()
+	{
+		A a, *ap = &a;
+
+		a [12] = 3.14;		// overload
+		ap [12];		// default action: ptr arithmetic, result 'struct A'
+		ap ->[12] = 3.14;	// overload
+		ap [12][12] = 1.41;	// overload on 12th element of ap array
+	}
+
+
+1e. Very Unsafe operator
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is the '=' operator. Normally, it makes sense in all cases.
+If overloaded, it will always use the overloaded version for structures
+and the default action for pointers. So this works exactly like the
+unsafe operators.  Also note that this is not a copy constructor:
+it is not invoked in declaration initializations.
+
+The second operator is '->' which works ONLY for objects. See "5.0.new-in-.."
+
+
+1f. Non overloadable
+~~~~~~~~~~~~~~~~~~~~
+Non-overloadable operators at the moment are:
+
+	unary:	& (cast) sizeof delete new localloc
+	postfix: .
+
+There are reasons for not overloading each of these.
+Send proposals to the mailing list.
+
+
+* 1g. New in lwc-1.0 *
+~~~~~~~~~~~~~~~~~~~~~~
+As an exception to whether overloading on unsafe operators is permitted,
+if the first operand is 'this' overloading takes place.  For example:
+
+	class A {
+		int &operator [] (int i) {
+			return g [i];
+		}
+		int &operator += (int i) {
+			return g [0] += 13;
+		}
+		int f () {
+			this [12] = this [13];	// operator overload!
+			this += 24;		// overload
+			this += this [12];	// overload
+			(A*) this += 12;	// default action
+			((A*)this) [1] = 3;	// default action
+		}
+	};
+
+This happens for all the dangerous operators except:
+	unary * and binary == and !=
+
+_________________________
+2. An interesting example
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An interesting example where we implement our own complex
+number arithmetic.
+
+
+	extern "stdio.h" {
+	#include <stdio.h>
+	};
+
+	class A {
+		float re, im;
+		ctor (float r, float i) {
+			re = r, im = i;
+		}
+		A operator + (A a) {
+			A r;
+			r.re = re + a.re;
+			r.im = im + a.im;
+			return r;
+		}
+		A operator - (A a) {
+			A r;
+			r.re = re - a.re;
+			r.im = im - a.im;
+			return r;
+		}
+		A& operator = (A a) {
+			re = a.re;
+			im = a.im;
+			return this;
+		}
+		A& operator += (A a) {
+			re += a.re;
+			im += a.im;
+			return this;
+		}
+		A& operator *= (float f) {
+			re *= f;
+			im *= f;
+			return this;
+		}
+		void operator !! () {
+			printf ("[%.3f %.3f]\n", re, im);
+		}
+	};
+
+	int main ()
+	{
+		A c1 (1, 2), c2 (3, -1);
+		A c, cc (1, 1);
+		A c4 (-1, -1), c5;
+
+		cc += c = c1 + c2;
+		c5 = c4 + (cc += c = c1 + c2) + c4;
+
+		c5 *= 3;
+		c5 *= 1.0/3.0;
+		!!c1, !!c2, !!c, !!cc;
+		!!c4, !!c5;
+	}
+
+The interesting thing demonstated in this program is when to return a
+reference and when to return an object.  A reference should be returned
+when the object is modified and the result is an-lvalue.  On the other
+hand when the operation is a temporary value, a temporary object should
+be returned.
+
+A problem with lwc at the moment is that it will call the destructor of
+the object of, say, function '-' while it will not call the constructor
+of the temporary object where the return value will be placed.  In simple
+words, we can't use this technique yet on object that allocate/free memory
+at their construction/destruction, or do other critical things there.
+
+
+______________________________________
+3. lwc && structure by reference calls
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In lwc, structures are always passed by reference.  Moreover, as explained
+in the tutorial, both a structure and a pointer to a structure can be
+passed to such reference arguments.  The lwc preprocessor will make the
+necessary conversions.  As a result, it is possible that the one operand
+will be an object and the other a pointer to an object.  It will work.
+
+	class A {
+		void operator == (A);
+	};
+
+	int test ()
+	{
+		A a, *ap;
+
+		ap == a;
+		a == ap;
+	}
+

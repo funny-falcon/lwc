@@ -1,0 +1,144 @@
+
+Abstract template macro classes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Abstract classes are an alternative way to deal with multiple inheritance
+and more specifically with cases of virtual inheritance and "diamond"
+hierarchies.  These are extreme OOP features used rarely anyway (and even when
+used only a couple of classes will have virtual inheritance in a multi-thousand
+line program).  So we suppose you know and really need virtual inheritance.
+Lets see the classic example implemented with virtual inheritance first and
+abstract classes later:
+
+	class helloworld_base {
+		virtual void phello () = 0;
+		virtual void pworld () = 0;
+	   public:
+		void greet ()
+		{ phello (); printf (" "); pworld (); printf ("!\n"); }
+	};
+
+	class hello : helloworld_base {
+		void phello ()	{ printf ("hello"); }
+	};
+	class HELLO : helloworld_base {
+		void phello ()	{ printf ("HELLO"); }
+	};
+	class world : helloworld_base {
+		void pworld ()	{ printf ("world"); }
+	};
+	class WORLD : helloworld_base {
+		void pworld ()	{ printf ("WORLD"); }
+	};
+
+	// instances
+	class hw : hello, world {};
+	class Hw : HELLO, world {};
+	class hW : hello, WORLD {};
+	class HW : HELLO, WORLD {};
+
+	int main ()
+	{
+		hw a;
+		Hw b;
+		hW c;
+		HW d;
+
+		a.greet ();
+		b.greet ();
+		c.greet ();
+		d.greet ();
+	}
+
+  This program shows a typical case of complex polumorphism.
+Here is the same program with abstract classes.  An abstract class
+is declared with the syntax "template class".  This does not
+conflict with the other templates which are the multi-line macros.
+
+	class helloworld_base {
+		virtual void phello () = 0;
+		virtual void pworld () = 0;
+	   public:
+		void greet ()
+		{ phello (); printf (" "); pworld (); printf ("!\n"); }
+	};
+
+	template class hello {
+		void phello ()	{ printf ("hello"); }
+	};
+	template class HELLO {
+		void phello ()	{ printf ("HELLO"); }
+	};
+	template class world {
+		void pworld ()	{ printf ("world"); }
+	};
+	template class WORLD {
+		void pworld ()	{ printf ("WORLD"); }
+	};
+
+	// instances
+	class hw : helloworld_base, hello, world {};
+	class Hw : helloworld_base, HELLO, world {};
+	class hW : helloworld_base, hello, WORLD {};
+	class HW : helloworld_base, HELLO, WORLD {};
+
+  Abstract template classes are more like macros.  When a derrived class has an
+abstract class parent, all the declarations of the abstract class will be
+included in the derrived class.  The abstract class itself is not a real
+type and it is not possible to declare objects of this type.  It can only be
+used in inheritance.
+
+Pros and Cons:  OOP is designed in C++ with the goal of maximum code
+re-use (and rightly so).  Using abstract classes has the oposite effect.
+In the above examples, in the first version with the virtual inheritance only
+four functions are defined.  The version with the abstract classes has eight
+functions (but only four writen by the programmer ==> macros!).  On the other
+hand accessing the members of the helloworld_base object is much faster.
+Plus the final objects are smaller.
+
+  So it depends on what you want.  Something that requires virtual inheritance
+can be implemented with abstract classes instead.
+
+Abstract classes can have their own hierarchy.  For example:
+
+	template class XX {
+		int f ()	{ return x++; }
+	};
+
+	template class YY : XX {
+		float values [1024];
+		void reset ()
+		{ int i; for (i=0;i<1024;i++) values [i] = 0; }
+	};
+
+	class A : YY {
+		int x;
+	};
+
+In this example, class A is the same as if it was declared:
+
+	class A {
+		int f ()	{ return x++; }
+		float values [1024];
+		void reset ()
+		{ int i; for (i=0;i<1024;i++) values [i] = 0; }
+		int x;
+	}
+
+which now clearly shows that abstract classes are exactly like macros.
+
+Definitions of abstract template class member functions can be outside
+the class.  Also, the abstract classe's base type is replaced with the
+current instantiation type:
+
+	template class XX {
+		XX foo (XX);
+	};
+
+	XX XX.foo (XX x)
+	{
+		XX x2;
+		return x2;
+	}
+
+	class A : XX {};

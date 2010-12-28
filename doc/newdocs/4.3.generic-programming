@@ -1,0 +1,194 @@
+
+Generic Programming
+~~~~~~~~~~~~~~~~~~~
+
+  Generic programming is the concept of using the
+same code with different types, where eventually the
+code is expanded for each type requested.
+
+C++ introduces the notion of template<>.
+In lightweight C++, generic programming is achieved
+with template macro classes and locallity of typedefs
+in a more OOP style. 
+
+
+0a. abstract template classes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Abstract classes are in reallity just macros expanded
+with hierarchy into derrived classes.  For example:
+
+	template class XX {
+		int foo ()	{ return i++; }
+	};
+
+	class A : XX {
+		int i;
+	};
+
+In this example 'A' is the same as if it was declared:
+
+	class A {
+		int foo ()	{ return i++; }
+		int i;
+	};
+
+The class 'XX' is called abstract because it is not really
+parsed until it derrives into a real class.
+
+
+0b. local typedefs
+~~~~~~~~~~~~~~~~~~
+
+  A typedef declared inside a class is local to the
+class.  Only declarations in the scope of the class
+can use its name.  Example:
+
+	class A {
+		X bar [100];
+		typedef int X;
+		X foo ();
+	};
+
+	X A.foo ()
+	{
+		X i;
+		return i;
+	}
+
+Local typedefs are parsed before all other declarations.
+
+
+1. Putting it together
+~~~~~~~~~~~~~~~~~~~~~~
+
+  With the two above combined we can make a sample
+container template.  Because every declaration in
+a template class is abstract, it can use names not
+declared yet.
+
+	//
+	// a template using a type 'X'.
+	// not declared yet
+	//
+
+	template class container {
+		X values [100];
+		void reset ();
+		X &operator [] (int i) {
+			return values [i];
+		}
+	};
+
+		// this is abstract -- non existant
+	void container.reset ()
+	{
+		X x;
+		memset (values, 0, sizeof values);
+	}
+
+	//
+	// make a container of integers
+	//
+
+	class i_container : container {
+		typedef int X;
+	};
+
+	//
+	// make a container of floats
+	//
+
+	class f_container : container {
+		typedef float X;
+	};
+
+	//
+	// a container of container of integers
+	//
+
+	class ci_container : container {
+		typedef i_container X;
+	};
+
+	//
+	// use it
+	//
+
+	int main ()
+	{
+		f_container F;
+
+		F.reset ();
+		F [1] = F [32] = 3.14;
+	}
+
+
+2. Unique Specializations
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  lwc implements the keyword 'specialize'.  The syntax of
+specialize is:
+
+	specialize container { typedef float X;	} Obj;
+
+Which will declare an object called "Obj" and will specialize
+the container template with floats.  In a way this is equivalent
+to an anonymous class:
+
+	class : container {
+		typedef float X;
+	} Obj;
+
+But there is also a difference.  With specialize, lwc will not
+re-specialize the template if it has been specialized before
+with this type.
+
+This is extremely useful for templates in templates where
+the types depend on the outer types.  For example:
+
+	template class TwoContainers {
+		specialize container { typedef T1 X; } Cont1;
+		specialize container { typedef T2 X; } Cont2;
+	};
+
+	specialize TwoContainers { typedef int T1, T2; } IntIntObj1;
+
+	specialize TwoContainers { typedef int T1;
+		typedef float T2; } IntFloatObj1;
+
+Here, although there are three requests to specialize a container
+with 'int's, lwc will only specialize it once, give it a special
+name and use this name the next two times.
+
+This is also helpful in the case of a container of containers:
+
+	specialize container {
+		typedef specialize container {
+			typedef int X;
+		} X;
+	}
+
+3. Default types
+~~~~~~~~~~~~~~~~
+
+In a hierarchy of template classes, the most recent typedef
+declaration wins.  For example:
+
+	template class A {
+		typedef int X;	// default type unless overrriden
+		X values [100];
+	};
+
+	specialize A {} Obj1;
+	specialize A { typedef float X; } Obj2;
+
+Here, Obj1 has an array of integers and Obj2 an array of floats.
+
+
+4. Warning
+~~~~~~~~~~
+
+This is still an experimental feature.  Some weird corner cases may
+not work as they have not been tested.  If lwc complains or gives
+incorrect code, send e-mail to the list.

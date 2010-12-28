@@ -1,0 +1,195 @@
+
+New stuff in lwc 0.7
+~~~~~~~~~~~~~~~~~~~~
+
+ In external documents you'll find info on
+exceptions and auto virtual functions.
+
+
+
+Binary enums
+------------
+
+  The keyword "benum" is just like enum but the constants
+will have the values 1, 2, 4, 8, 16, 32, 64....
+
+	benum flags {
+		O_READ, O_WRITE, O_APPEND, O_TRUNC,
+
+		XXX = 12 // wrong! can't set values!
+	};
+
+This is very useful for boolean flags.
+The number of constants is restricted to no more than 32.
+It is not possible to set values to these enums.
+
+
+
+Class Constants
+~~~~~~~~~~~~~~~
+
+  Class constants are macros enclosed in the scope of the
+class and they can only be  accessed by member functions.
+They are like const declarations without the basetype and
+the '='.  For example
+
+	int z;
+
+	class A {
+	const	X0 32;
+	const	Y0 64.1;
+	const	Z0 z;
+	};
+
+Currently, a class const can only be one token but it might be a
+good idea to have multi-token  such consts.  They don't  have an
+address and whenever a class const is seen in an expression it's
+replaced by the corresponding value.
+
+Class constants are inherited and can be overriden in derrived
+classes.  This only makes sense with the auto functions though.
+
+
+
+const / inlined virtual table
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Normally, virtual tables are non-constant and not inlined.
+However, it is possible to tune these by the use of "virtual",
+and optionally "const" and/or "inline" specifiers in a class.
+For example:
+
+	class A {
+		const virtual;	// const not-inlined vtable
+	};
+
+	class B {
+		virtual inline const;	// const inlined vtable
+	};
+
+	class C {
+		virtual;		// non-const, non-inlined, vtable
+	};
+
+The _lwc_config_ option cons_virtual_tables still applies to make
+all virtual tables constant by default.
+
+If a class already has a vtable, it's properties cannot be changed.
+
+The combination const+inlined virtual table, works with lwc but it
+is restricted by the C compiler: assignment of classes with const
+inlined vtables will produce warnings.
+
+
+
+_loadtext directive
+~~~~~~~~~~~~~~~~~~~
+
+  The loadtext directive is used to instruct the lwc preprocessor
+to read the text of a file and convert it to a string literal.
+
+	const char help [] = _loadtext <help.txt>;
+
+	int main ()
+	{
+		puts (_loadtext <test.c>);
+	}
+
+ In sequential _loadtext directives the strings will be
+concatenated.  While converting the text of the file to
+a quoted string literal, quotes and backslashes are escaped
+and newlines and tabs are converted to \n and \t.
+
+
+Parameter name omitted
+~~~~~~~~~~~~~~~~~~~~~~
+
+ A function parameter name may be omitted as in C++.
+
+	int foo (int x, int)
+	{
+		return x;
+	}
+
+
+
+Virtual overrides all
+~~~~~~~~~~~~~~~~~~~~~
+
+  In multiple inheritance, if a virtual function exists
+in both parents with the same name/arguments, and it is
+redeclared, it will be redeclared for both.  This is
+mostly useful for destructors:
+
+	class A {
+		virtual dtor ();
+	};
+	class B {
+		virtual dtor ();
+	};
+	class C : A, B {
+		dtor ();
+	};
+
+Here, if an object C is deleted as a A or B, the C.dtor
+function will be used in both cases.  Same thing will happen
+for any other function with the same name, although the
+dtors is the only reasonable application of this.
+
+
+Anonymous Unions
+~~~~~~~~~~~~~~~~
+
+  lwc supports anonymous unions in structures. Their members
+can be accessed transparently as if they were normal members
+of the structure.  For example:
+
+	class X {
+
+		union {
+			int a;
+			char b;
+			double c;
+			float d [100];
+		};
+
+		int i;
+	};
+
+	int main ()
+	{
+		X x;
+
+		x.a = x.d [1] = x.i = 0;
+	}
+
+lwc also supports anonymous transparent structs (lwc 1.1)
+
+typeof
+~~~~~~
+
+  So far we wanted to avoid the use of typeof(), but it seems
+it may be needed in auto functions to get the typeof(this).
+
+
+for declaration
+~~~~~~~~~~~~~~~
+
+  Like C99 and C++, the first part of for () statement can
+be declaration.
+
+	for (int i = 0; i < 10; i++)
+		;
+
+
+Linkonce sections
+~~~~~~~~~~~~~~~~~
+
+  The ability of the linker to collapse sections is extremely
+useful.  Currently linkonce sections are used to store
+virtual table instances, inline virtual functions,
+auto functions defined outside the class and
+member functions of abstract template classes defined
+outside their class.
+
+and auto function definitions.

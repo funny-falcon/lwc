@@ -1,0 +1,598 @@
+version 1.4 (Crazy Baboon)
+==========================
+
+- '!!' operator removed.
+
+- See doc/newdocs/10.0-new-in... for the new stuff
+
+- [GOOD] The "key function" method is used to emit virtual tables:
+  The file in which the first not-inlined, non-auto function is defined,
+  will be the file that includes the virtual table of the class.
+  If no key function exists, the virtual table is emitted as static in all
+  files.  This also applies for 'static class { ... };'
+
+- [low-level FEATURE] __on_throw__ statement which allows more control over
+  exceptions
+
+- [NEW] goto (...) ? label1 : label2
+
+- [NEW] integer virtual variables can be initialized with |= and &=
+
+- [NEW] global function(s) named 'ctor' are called before main.
+
+- [low-level FEATURE] turn switches into address tables.
+
+- [NEW] we can overload 'new' and 'delete' for classes to provide
+  custom object allocators.
+
+- [NEW] aliases. Member functions can be aliases for other
+  functions. That is more interesting for auto-functions.  As in:
+	void xprint () alias (print);
+
+- [IMPROVEMENT] in many cases lwc now uses aliases (with
+   ``__attribute__((alias ("func")))'').  This is frequent in
+  auto functions that dispatch to their parent, destructors, etc.
+  The result is faster/less code.
+
+- [IMPROVEMENT] 'delete' may have an object for an argument (not a
+  pointer to object).  This is used in the case of virtual destructors
+  to say that the object's type is known and the virtual call will
+  be avoided.
+		A *a;
+		delete a;	// virtual call to dtor
+		delete *a;	// direct call to A_dtor_()
+
+- [NEW] '__inset__' pseudo-function which check whether a value
+  is one of its constants with a switch.
+
+- [NEW] '__unwind__' can appear in a *class declaration*.
+  Such a class will always be registered for __unwind__ when local
+  objects are declared.  This is important because we can easilly
+  emulate C++ without the use of gcc's cleanup attribute.
+  Moreover, lwc does an analysis to see if exceptions may be thrown
+  and it will not emit unwind-code for code paths where exceptions
+  will definitelly not occur.  Attribute 'nothrow' implemented too.
+
+- [CHANGED] 'final' is made a reserved word.  It can appear before a
+  class declaration to tell that none of the class's virtual functions
+  will be overriden in derrived classes (or that the class will not
+  derrive).  As in:
+	final class B : A { ... };
+
+- [CHANGED] exceptions throw a 'void*' pointer instead of an integer
+  value. We can now throw objects (as in 'throw new Foo (1,2)').
+  However, we will still need to implement our own typeid (which
+  is easy though as _v_p_t_r_ is exposed to userland).
+
+- [FIXED] static local variables with constructors are moved out
+  of the function and constructed only once before main ().
+
+- [IMPROVED] lwc now accepts 'long' as a unique type. Before, 'long'
+  was converted to 'int' because it was believed that these two are
+  the same.  However, in "modern" 64-bit CPUs 'long' is used to denote
+  64bit integers and int 32bit.
+
+- [CHANGED] destructors call destructors of parent classes as C++.
+	struct D1 { virtual ~D1 () { printf ("~D1\n"); } };
+	struct D2 : virtual D1 { ~D2 () { printf ("~D2\n"); } };
+	struct D3 : virtual D1 { ~D3 () { printf ("~D3\n"); } };
+	struct D4 : D2, D3     { ~D4 () { printf ("~D4\n"); } };
+	int main ()
+	{
+		D1 *d = new D4;
+		delete d;
+	}
+   shall print	~D4, ~D2, ~D3, ~D1
+   This does not happen for destructors declared 'auto'.  These dtors
+   only call the 'internal destruction' function which dtors any data
+   members that need destruction and arrange the destruction of the
+   parent's parents recursively, obeying the above rules.  Double check
+   the generated code if you use auto dtors.
+
+- [CHANGED] 'new' has a higher priority than '->' and therefore	"new A->x"
+  first invokes 'new' and then gets the member.
+
+- [NEW] Power VarArgs.
+
+- [FEATURE] it's safe to compare typeids.
+
+- [NEW] _v_p_t_r_ exposed to userland and allows for type mutation.
+
+- [BUGFIX] virtual inheritance with pure virtuals was partly broken.
+
+- [FIXES] tons of fixes for pure typedefs and auto functions.
+
+version 1.3.2
+=============
+
+- Changed the generated code for the gcc cleanup attribute so that if a 
+  constructor throws, the destructor is not invoked. As in the simple case
+  where we don't have the cleanup attribute and like C++.
+
+version 1.3.1
+=============
+
+- [REGRESSIONS] most tests in Samples/ no longer compiled!
+  The one problem was that the function stat() was considered a 'declaration
+  expression' constructing a temporary object 'struct stat'. Typical
+  problem.
+  The other regression is that with the new schema with exceptions, setjmp.h
+  is automatically included and that means that all headers'd better be in
+	extern "stdio.h" {
+	#include <stdio.h>
+	}
+  segments.
+
+- [CHANGE] The 'switch value' feature has been changed to 'switch
+  (declaration)' feature. For example:
+	switch (int x = foo (bar())) {
+	}
+
+- [IMPROVE] no dtors are emitted if a compound statement ends in 'return',
+  'break', 'continue' or 'goto'.
+
+version 1.3
+===========
+
+- [FEATURE] 'typeid' a special virtual variable which is automatically
+  initialized with the name of the class.
+
+- [FEATURE] gcc's 'cleanup' attribute. Very useful. If lwc is compiled
+  with gcc 3.4 this is enabled by default.  It has two major implications.
+
+	1) Code for the destruction of local objects is automatically
+	   generated by the compiler.  lwc produces less code.  it also
+	   works with 'goto'!
+
+	2) cost-free exception cleanups.  If the generated C code is
+	   compiled with -fexceptions, destructors of all local objects
+	   are invoked when exceptions are raised.  like c++
+
+- [CHANGE] switched from 'setcontext' to 'setjmp' for exceptions.
+  'throw 0;' does no longer re-do the try statement.
+
+- [FEATURE] pure typedefs and consequently pure data members.
+  Generic programming can now be done with auto-functions instead.
+
+- [BUGFIX] auto-functions using class-typedefs in their arguments
+  have been improved.  Everything works better now.
+
+- [BUGFIX] programs using __unwind__ while a context was not prepared
+  by a 'try' would segfault.
+
+- [BETTER] when local class typedef used and the type is a simple type,
+  we emit the simple type name in the output, like 'int', etc,
+  rather than the confusing TyPeDeF_ name.
+
+- [GOOD] lwc understands __builtin_expect.
+
+- [FEATURE] declaration expressions of temporary objects.
+
+version 1.2
+===========
+
+- [**ATTN**] forcing overloaded operator calls. The syntax has been
+  changed. If you used parentheses to force an operator overload, you should
+  fix the code. Now -> is used before the operator to to it. For example:
+		a (+) b
+  should be changed to:
+		a ->+ b
+
+- [FEATURE] modular data members. Same as C++'s static data members.
+
+- [BUGFIXES] usual set. Tons of tiny corner-case bugs fixed.
+
+- [FEATURE] auto-functions are redefined on the use of local typedefs.
+  That can lead to some extent of generic programming. see doc 8.1
+
+- [BUGFIX] don't call constructor for global objects declared 'extern'
+
+- [BUGFIX] 'linkonce' specifier on global functions would cause an
+  embarassing segmentation violation.
+
+- [FEATURE] non-virtual functions can be pure. This is only useful for
+  auto functions because we don't emit code for an auto function that
+  calls a pure function. (compile-time polymorphism)
+
+- [GOOD] no code is emitted for auto-functions that call pure functions.
+  Those functions are, too, considered pure and the procedure goes on
+  recursively to eliminate all the auto-function code that may
+  never be called.
+
+- [FEATURE] calling member functions from specific parent classes can
+  be done with the syntax 'class.func()'. This is a shortcut for the
+  casts that were previously used '((class*)this)->func()'.
+
+- [BUGFIX] modular functions called directly (not through vptr), had
+  a problem with their first argument for which no conversions were done.
+
+- [NEW] Long break/Long continue.  Break out of more than one nested
+  loops with proper destruction of locals.
+
+- [GOOD] not only object names but also typedef'd object names can be
+  used in 'new', inheritance and other places. This is very useful for
+  'typedef specialize'. Sample:
+	template class T {
+	virtual	X vv;
+	modular	X f ()	{ return _CLASS_.vv; }
+		X i;
+		T () {}
+	};
+	typedef specialize T { typedef int X; } O;
+	int O.func ()
+	{
+		return i;
+	}
+	class A : O {
+		int flk;
+	};
+	int main ()
+	{
+		O o;
+		new O;
+		O.vv = 12;
+		O.f ();
+		A a;
+	}
+  That's right.
+
+- [NEW] declaration specifier '__unwind__'. Local objects declared
+  with this are destructed on 'throw'. Info on 3.2-exceptions
+
+- [CHANGE] we do not call destructors of static local objects when
+  their scope closes.
+
+- [KEWL] now lwc throws a warning if we forget the semicolon after
+  the declaration of a class (very common mistake)
+
+version 1.1
+===========
+
+- [NEW] enum by name. Generate enum name strings for integer
+  values with __enumstr__(ENUM_TAG, value)
+
+- [BETTER] static functions are not placed in linkonce
+  sections.
+
+- [FEATURE] attribute 'final' for virtual functions.
+
+- [CORRECTION] references should invoke virtual calls and not
+  direct member calls. Other fixes for structures passed by
+  reference resulting in virtual stuff (for example access of
+  virtual base's members in virtual inheritance).
+
+- [BUGFIX] auto functions were not cooperating with the "derrived
+  objects without data members" optimization.
+
+- [FEATURE] template classes can have real-class ancestors. These
+  are inherited in specializations.
+
+- [NEW] Variable length arrays (VLA) are transformed to alloca().
+
+- [FIX] The name of a local object can be used in its initialization
+  expression. For example:
+	int i = sizeof i;
+
+- [GOOD] added some useful informative warnings in code generation
+
+- [BUGFIX] in the conversions of ?: to bring the expressions
+  to a common type. If one is a pointer and the other an int,
+  the resulting type is a pointer.
+
+- [BUGFIX] several fixes for 'specialize' in local scopes.
+  It had only been tested for global specializations.
+
+- [BUGFIX] modular member functions which were defined outside the
+  body of their class, could not call other modular functions of
+  the class!
+
+- [IMPROVEMENT] regular expressions can use strncmp/strncasecmp
+  for long fixed strings. Makes code smaller.
+
+- [BUGFIX] in regular expression code generation.
+  A '&&' should be '||' somewhere.
+
+- [FEATURE] function call () operator can be overloaded.
+
+- [FEATURE] anonymous struct objects supported like anonymous
+  union objects.
+
+- [BUGFIX] nested anonymous union objects didn't work.
+
+- [RIGHT-THING] in the previous version, operator overloading for
+  postfix unary operators (++, --, !!), was not fully implemented.
+  We use the -already- reserved keyword 'postfix' to declare these.
+
+- [RIGHT-THING] assignments in initializations are converted
+  to constructor calls.
+
+version 1.0
+===========
+
+- [FEATURE] construction of each element of array of objects
+  with ctors. see 6.2-doc
+
+- [FEATURE] single-quoted strings
+
+- [FEATURE] it's possible to assign structures with const
+  members. Normally, the C compiler will complain for changing
+  value of read-only member. lwc uses memcpy for such assignments.
+
+- [BETTER] The pointer to the virtual table
+  is declared const and cannot be altered in the lifetime of an
+  object. This is good becase the compiler may be able to optimize.
+
+- [DESIGN] An important design decission.
+  lwc will adapt to the compiler it was compiled with and produce
+  code suitable for it. We would like to generate one portable
+  works-for-all C99 code, but unfortunatelly this is utopic.
+
+- [FEATURE] if overloaded operators (except unary '*')
+  are applied on "this", overloading function is called.
+
+- [FEATURE] references and the dereference() unary operator
+
+- [NEW] regular expression to C code expander
+
+- [NEW] postfix
+
+- [FEATURE] escape raw strings with r"string"
+
+- [RIGHT] global initialization constructor function not emitted if
+  not used. Also, we use the __attribute__ ((constructor)) thing to
+  register the global construction function instead of the obsolete
+  __section__ (".ctors")
+
+version 0.9
+===========
+
+- [FEATURE] linkonce data
+
+- [FEATURE] some amazing optimizations which improve the generated
+  C code quality.  virtual inheritance can be really gone if derrived
+  objects have no data. see doc
+
+- [FEATURE] alternative constructors
+
+- [FIX] virtuallity pseudo functions which downcast,
+  now get a name which includes both classes. (should be so)
+
+- [NEW] 'modular' member functions that don't have "this"
+
+- [NEW] _CLASS_ keyword to be used with macros and auto
+  functions.
+
+- [RIGHT-THING] function () const in the declaration
+  is passed to the definition.
+
+- [REWRITE] of function namespaces code.  Now everything
+  is much better and we can easilly add more new things,
+  inherited specifiers/qualifiers, et all.
+
+- [MISC BUGFIXES] in autofunction
+
+- [FEATURE] keyword 'specialize' for
+  unique specialization of template classes according to their
+  local typedefs.
+
+- [NEW] lwc program can now do C preprocessing.
+  Thus it is independent of the system's preprocessor
+  'cpp' and has the #uses directive to read header
+  files. Still, the system's preprocessor is more
+  portable and used by default.
+
+- [BUGFIX] for some invalid expressions with missing
+  operands, lwc would not handle them correctly and
+  would use uninitialized data.
+
+- [NEW] operator overloading on -> implemeted
+
+- [CHANGE] best virtual table to add new entries
+  is the most recently created one. logically.
+
+version 0.8
+===========
+
+- [FIXES] many fixes in function overloading resolution, type promotion, etc.
+
+- ** [NEW] Generic Programming with template classes + local typedefs
+  - functions of template classes can be declared outside their class.
+
+- [FEATURE] class declaration qualifiers
+  apply to all member functions. This undoes the
+  older feature to place 'static' infront of a class
+  declaration to force definition of virtual table.
+
+- [RIGHT-THING] destructors return 'this'.
+  The return value is used by free() in delete.
+  This is the right thing for proper destruction
+  in virtual/multiple inheritance.
+
+- [FEATURE]
+  functions returning structures can be arguments
+  to functions receiving structures -- by reference.
+
+- ** [NEW] Operator overloading. rewrite of the rexpr.c
+
+- [DONE] references
+  functions can return references, which are lvalues.
+
+- [FORGOT] to update the version number
+
+- [CHANGED] the "mEmBeR" post string is really gone. member
+  function names are <function>_<object>_ which is rare-enough
+  and nicer.
+
+- [NEW] the '!!' postfix/prefix operator for boolean negation.
+
+- [NEW] portability project. lwc can reinclude files for the
+  C compiler to make the code portable.
+
+- [RT] class consts can be used to initialize array members
+  bitfields and virtual variable initialization expressions.
+
+- [FIX] yet more fixes in the code which decides if autofuncs
+  are the same and need redefinition or not.
+
+version 0.7.1
+=============
+
+- [BUGFIX]
+  using uninitialized value maybe_ctor. thanks valgrind!
+
+- [CHANGED]
+  auto functions are redefined if they reference 'this'
+
+version 0.7
+===========
+
+- [NOTICABLE]
+  linkonce linker sections where discovered and used.
+  This is very useful for several reasons:
+	- virtual tables don't have to be seen by main.
+	  they are defined in every object file.
+	- Virtuallity functions which make up the virtual
+	  table entries are collapsed (the executable is
+	  eventually smaller).
+	- this allows the implementation of templates and
+	  the auto functions
+
+- [NEW] __thread is a valid storage class specifier
+
+- [NEW] Exceptions
+  As a mechanism to a structured setjmp/longjmp implementation.
+  see doc/EXCEPTIONS
+
+- [BUGFIX] the "return" statement will generate some
+  more code to call the destructors of all the local objects.
+  In the case of a function returning void, the generated
+  code was broken and syntactically invalid.
+
+- [RIGHT-THING/FEATURE]
+  In multiple inheritance if a virtual function redeclared
+  exists in multiple parent classes, it is adjusted for both.
+
+- [FEATURE]
+  In the gnuC extension of conditional operator ?: with omitted
+  middle operand: it is made to work with automatic casts in
+  inheritance.
+
+- [NEW] the cool feature advertised, that it is possible
+  to define member functions without a declaration in the class
+  was not actually working. It is implemented because it's a
+  good idea.
+
+- [RIGHT-THING]
+  If a virtual function calls itself recusivelly, the call does
+  not have to go through the virtual table. It knows which function
+  is called at compile-time.
+
+- [BUGFIX] embarassing segfaults
+  -if arguments were named in declarations of virtual functions!
+  -in ambiguous member functions (isancestor)
+
+- [COOL] auto virtual functions. See the NEW-0.7 for this great
+  extension.
+
+- [NEW] binary enum
+  the benum declarator will generate constants like enum but
+  with binary exponential succession. 1, 2, 4, 8, 16, 32, ...
+  which can be used for boolean flags.
+
+- [NEW] _loadtext <filename>
+  WIth this directive, lwc will read an entrie text file and
+  convert it to a string literal, escaping \" and \n.
+  Null terminate it and quote it.
+
+- [NEW] parameter name may be omitted in function definitions
+
+- [NEW] anonymous unions: they are supported
+
+- [NEW] typeof() is a valid lwc keyword
+
+- [NEW] for (int i;) implemented
+
+- [NEW] The ability to request the generation of a const/inlined
+  virtual table has been improved.
+
+- [RIGHT-THING] Downcasting and upcasting from null pointer (0),
+  results to null pointer (0) again; it should be so.
+
+
+version 0.6
+===========
+
+- [CRITICAL] Bugfix. Downcast data which was position dependent
+  was completely broken therefore.
+
+- [CRITICAL] expressions in { initializers } were not rewritten!
+
+- [BUGFIX] segfaulting in default argument list declarations.
+
+- [BUGFIX] automatic casting in "return expression;" was not working properly
+  in inheritance.
+
+- [BUGFIX] It used to be impossible to call redeclared virtual functions
+  in multiple virtual inheritance from a base object which was
+  not a pointer! (whatever that means)
+
+- [FIXED] Fixed the case where a virtual call must be done for structures
+  passed by reference. These are actually pointers and not objects
+  so we go through the virtual table and call the pointer to function.
+
+- [FIXED] automatic casting to common base class is also done for relational
+  operators (used to be in ?: only)
+
+- [REWRITE] Major rewrite of the hierarchy module. Now everything is
+  simpler, easier to understand and more efficient. (simple is the enemy of
+  complex)
+
+- [REWRITE] The code for naming all the arguments of function prototypes
+  has been rewritten, significantly improved and simplified.
+
+- [IMPROVED] "virtual tables done right".
+  The virtual tables are now declared with lots of nested unions so that
+  the order of declaration does not matter.  Virtual tables are also
+  smaller.
+
+- [IMPROVED] in virtual inheritance,
+  compile-time polymorhism is detected to generate constant paths.
+  Internal construction functions are smaller && faster.
+
+- [RIGHT-THING] if a virtual base class has no data members (only a virtual
+  table) then virtual inheritance is much more efficient. The derrived
+  class has a direct pointer to the virtual table instead of a pointer to
+  the base class instance. g++ appears to be doing something like that too.
+
+- [RIGHT-THING] Now the virtual table declarations and the structure declarations
+  are mixed in the same section. This is required because of virtual
+  variables: A virtual variable may be a structure and thus, virtual
+  table declarations can no longer be *before* the structure declarations.
+
+- [CHANGED] The generated names of member functions where changed. Now it is:
+  <function-name>_<structure-name>_mEmBeR which is more descriptive.
+
+- [NEW] _lwc_config_ {} command to pass options to the lwc compiler.
+   Interesting options : turn off structure-by-reference,
+   inline virtual tables by default, and other.
+
+- [NEW] virtual tables can be constant and into read-only memory.
+  also constness applied to some internal  functions.
+  it's possible to declare 'const *this' for member functions.
+
+- [NEW] const class members
+
+- [NEW] abstract template class macros.
+
+- [NEW] access of virtual variables without an instance.
+
+- [NEW] introduced "static class" to export the virtual table definition.
+
+- [NEW] overloaded operator ~
+
+- [NEW] anonymous object call constructor thing.
+
+- [NEW] Virtual inheritance declarations.
+  Solve the dynamic_cast problem
+
+* see the file doc/CHANGES-0.6 for the new stuff.

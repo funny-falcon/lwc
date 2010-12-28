@@ -1,0 +1,124 @@
+
+exceptions as added to version 0.7
+==================================
+
+New Keywords
+~~~~~~~~~~~~
+
+  The new keywords are "try" and "throw".  The role of
+"catch" is played by "else".  You can
+
+	 #define catch else
+
+for a C++ compatible syntax.
+
+The "else" statement is optional.  If not present, when
+an exception is thrown, the program resumes after the
+"try" statement.
+
+The "throw" statement is like "return".  It is followed
+by an expression of integer type which must be non-zero.
+- If no value is specified, then it will be '1'.
+
+The "try" statement may optionally followed by an indentifier
+in parentheses.  If an exception is raised this identifier will
+hold the integer value thrown.
+
+Unlike C++, the statement after "try" and "else" need not
+be compound.
+
+An example:
+
+	int printf (const char*,...)
+
+	void recur (int x)
+	{
+		printf ("Entered %i\n", x);
+		if (x == 10)
+			throw 13;
+		recur (x + 1);
+	}
+
+
+	int main ()
+	{
+		try {
+			printf ("try\n");
+			recur (0);
+			printf ("This is never reached.");
+		} else
+			printf ("caught exception\n");
+
+		// with value
+		try (retcode) recur (0);
+		else printf ("caught exception retcode=%i\n", retcode);
+
+		// without else
+		try recur (0);
+	}
+
+
+
+Threads
+-------
+
+  For multithreaded programs, the exception jump stack must
+be atomic.  lwc will detect that code is reentrant if the
+_lwc_config_ option "reentrant" is specified or the command
+line option -D__REENTRANT exists.
+
+  The code is made reentrant with the "__thread" extension
+to C by gcc.  This is a very new extension found in gcc 3.3
+and above so most people don't have it.
+
+  It's not difficult to add a custom posix thread library
+support for thread-safe exceptions.  If anybody's interested
+in that...
+
+
+Stack Cleanup
+-------------
+
+[*] If lwc is compiled with gcc 3.4 and above and the same compiler
+is used to compile the generated lwc code, then all local object's
+destructors are called during the unwind.  Just like C++.
+The generated C code must be compiled with the gcc option -fexceptions
+if you want to use try-throw. Otherwise -fexceptions can be avoided
+to have smaller binaries.
+
+[*] For other compilers/older gcc versions:
+
+  lwc DOES NOT automatically call the destructors of local objects
+through exceptions. lwc can be instructed to do so for objects with
+the '__unwind__' declaration specifier.
+
+	int printf (const char*,...);
+
+	class A {
+		ctor (int i_)	{ i = i_; }
+		int i;
+		dtor () { printf ("Calling dtor of %i\n", i); }
+	};	
+
+	int f (int y)
+	{
+	__unwind__ A x (y);
+		if (y == 10) throw;
+		return f (y+1);
+	}
+
+	int main ()
+	{
+		try {
+			f (0);
+		}
+	}
+
+Generally, __unwind__ costs a little so it should only be invoked
+on code where it is known that may be longjumped with exceptions and
+if the destruction of the object matters. Libraries SHOULD NOT throw
+on errors. Libraries should return an error condition on their entry
+point just like good C.   Libraries reporting errors with exceptions
+is a mis-use of the exception mechanism.
+
+reentrant behaviour of __unwind__ has not been studied.

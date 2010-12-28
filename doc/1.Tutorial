@@ -1,0 +1,1250 @@
+
+Lightweight C++ Tutorial
+========================
+
+The best way to learn lwc is to try writting small programs
+and see how they are translated to C.
+
+But how can you do that if you don't know the syntax of the language ??
+
+This is the goal of this small tutorial: To present the syntax of lwc,
+outline some basic aspects and demonstrate how is it possible to
+achieve some things which are not so obvious.  We will try to present
+some useful examples which will shortly teach you everything you need
+to know, in order to begin.
+
+
+0. Basics
+---------
+
+  In lwc, like in C++, you don't need to supply "struct" and "enum"
+before declared tags ("union" is needed though).  Moverover, in lwc,
+the functions are parsed after global has been parsed and there's no
+need for forward prototypes and declarations.  For example:
+
+	struct A {
+		int x, y;
+	};
+
+	int foo ()
+	{
+		A a;
+		bar ();
+	}
+	int bar ()
+	{
+		zoo ();
+	}
+	int zoo ()
+	{
+		foo ();
+	}
+
+  The above works ok since the lwc compiler will produce a section
+with all the function prototypes before the section with the function
+definitions.
+
+The type "bool" is a typedef'd int and the keywords "true" and "false"
+are automatically converted to "1" and "0" respectively.
+
+Expressions initializers in global need not be constant.  lwc wil use
+the section ".ctors" to register a global constructor to be called before
+main and evaluate all the non-constant initializers of global variables.
+
+All structures are passed by reference (see below).
+
+
+1. Member functions
+-------------------
+
+  Member functions don't do something you can't already do in C.
+They are normal functions with an extra hidden argument named 'this'
+which points to the structure.  The big advantage is that the lexical
+scope of member functions is included in the scope of the structure
+and the variable members can be accessed by the function as if they
+were global variables.
+
+  This is very helpful in program organization, as it encourages
+separating and grouping functions which are related to specific
+structures.  If member functions were available in C, then fopen,
+fprintf, fread and fclose would be member functions of the FILE structure.
+
+  Unlike C++, the scope operator is the dot '.'
+For example:
+
+	struct A {
+		int x, y;
+		int f ()	{ return x += y; }
+	inline	int bar (int);
+	};
+
+	int A.bar (int i)
+	{
+		x *= i;
+		return f ();
+	}
+
+	int main ()
+	{
+		A a;
+		a.bar (12);
+		(&a)->bar (23);
+	}
+
+Member functions, of course, do not affect the size of the structure.
+
+
+2. Function overloading
+-----------------------
+
+  A function can be redefined with different arguments like C++.
+Default arguments may be also supplied and they will be evaluated at
+the function call.  For example:
+
+	int f (int, int);
+	int f (int);
+	int k (int = x);
+
+	int test ()
+	{
+		int x;
+
+		f (1, 2);
+		f (1);
+		k ();		// will call k (x);
+	}
+
+At the moment the ambiguity rules are not very clear.
+Stick to the obvious and you should be Ok.  Some wrongs are:
+
+	int f (int);
+	int f (char);	// wrong char is integral promotion of int
+	int f (float);
+	int f (double):	// wrong float and double are the same
+
+
+3. Constructors
+---------------
+
+  In lwc, constructors and destructors are normal functions like all
+member functions.  It's even possible to call them at any time.
+Their advantage over other functions is that constructors and
+destructors are automatically called in "new", "delete" and in
+declarations of objects.
+
+  The constructor function has the special name "ctor" and the
+destructor function "dtor".  The constructor function may take any
+arguments and may even be overloaded.  The destructor function may
+not have any arguments.
+
+Example:
+
+	struct A {
+		ctor ();
+		ctor (int);
+		dtor ();
+	};
+
+	int test ()
+	{
+		A a1;		// will call ctor (&a1)
+		A a2 (12);	// will call ctor (&a2, 12)
+		A *ap = new A;	// will call ctor (ap)
+		delete ap;	// will call dtor (ap)
+	}
+
+As a matter of fact, it is possible to invoke the C++ syntax for the
+constructor and destructor names.  However, these will still be renamed
+to ctor and dtor, so it will still be possible to call them at any time
+by these names.  For example:
+
+	struct A {
+		A ();
+		~A ();
+	};
+
+	A.A () { ctor (); /* recursion! */ }
+	A.~A ()	 { }
+
+
+4. new, delete and localloc
+---------------------------
+
+  new and delete are available as in C++.  However they can only be used to
+allocate objects and arrays of object.  They can't be used to allocate other
+types.  localloc is the same as new but it uses alloca() to allocate the
+object in the stack frame.  For example:
+
+	struct A {};
+
+	int test ()
+	{
+		A *ap = new A;
+		A *al = localloc A;
+		delete ap;
+		new A [12];
+		//int *x = new int [1024];	// WRONG! not C++
+	}
+
+
+5. Inheritance
+--------------
+
+  Inheritance is one of the possible ways to achieve polymorphism.
+A derrived object inherits all the members of the parent object.
+Inheritance without virtual functions is rather useless, so if you're
+not familiar with it, don't puzzle yourself trying to find something
+useful about it: There isn't.
+
+In lwc ihneritance follows the C++ syntax.
+Example:
+
+	struct A {
+		int x, y;
+		int f ();
+	};
+
+	struct B : A {
+		int i, j;
+		int k ();
+	};
+
+	int B.k ()
+	{
+		x = i = y = f ();
+	}
+
+One interesting thing about inheritance is the ability to upcast and
+downcast.  You can assign a pointer to a B to a pointer to an A
+automatically (upcast).  Assigning a pointer to an A to a pointer to
+B is only possible with an explict cast.  For example, with the above
+declarations for A and B:
+
+	int test ()
+	{
+		B b;
+		A *ap = &b;		// automatic upcast
+		ap->f ();
+		B *bp = (B*) ap;	// downcast
+		bp->k ();
+
+		(flag ? ap : bp)->y = 1;	// ok
+	}
+
+Obviously, upcasting is always safe.  Downcasting may be wrong and you
+must be absolutely sure that the object is really a 'B' before you do
+it.  For that the explict cast is needed.
+
+
+6. Virtual Functions
+--------------------
+
+  Virtual functions are the main element of polymorphism.  In lwc a virtual
+function is two things: a member function and a pointer to a member function
+(which is part of the structure's data).  In lwc, the virtual function
+will be called through the pointer to function if the base object is
+a pointer.  Otherwise, the member function will be called. [NOTE: This
+does not apply for structures passed by reference. see CHANGES-0.6]
+For example:
+
+	struct A {
+	virtual	int f ()	{ return 1; }
+		int k ();
+	};
+
+	struct B : A {
+		int f ()	{ return 2; }
+	};
+
+	int A.k ()
+	{
+		return f ();	// virtual call. 'this' is ptr
+	}
+
+	int test ()
+	{
+		A a, *ap;
+		B b;
+		a.k ();		// will return 1
+		b.k ();		// will return 2
+		ap = cond () ? &a : &b;
+		ap->f ();	// virtual call ?
+		b.f ();		// member call !
+	}
+
+In general, virtual functions become part of the object's data.  The most
+efficient way to do that is with the use of a virtual table.  The virtual
+table is another structure which - so far - includes members that are
+pointers to functions.  Therefore, the size of an object is only increased
+by one pointer which points to the apropriate virtual table data, and
+is set at the construction of the object internally.
+
+A new virtual table will not be allocated if one is already inherited.
+For example:
+
+	struct A {
+	virtual int f ();
+	};
+
+	struct B : A {
+		int f ();
+	virtual int k ();
+	};
+
+	struct C : A {
+		int f ();
+	virtual int k ();
+	};
+
+In the above example, 'k' will be placed in the virtual table of A.
+For instances of type A, this entry of the virtual table will be
+uninitiallized and obviously unused.  Also note that in the above
+example, B.k and C.k are two different entries of the same virtual
+table.
+
+
+7. Virtual Functions (B) Constructors and Proper Destruction
+------------------------------------------------------------
+
+  It is possible to call a specific ancestor function if the base
+object is not a pointer.  For example:
+
+	struct A {
+	virtual int f ();
+	};
+
+	struct B : A {
+		int f ();
+	};
+
+	int B.f ()
+	{
+		(*(A*)this).f ();
+		// do something more
+	}
+
+In this example, B.f calls A.f.  In order for that to work we must
+avoid the virtual call through the pointer to function.  That's done
+because "(*(A*)this)" is an object of type A and not a pointer.
+
+This is also the way to call the contructors of parent classes.
+
+In lwc, constructors and destructors of parent classes are never
+called automagically.  You have to call them yourself.  It is often
+the case in polymorphism that we want a destructor that does "whatever
+the parent destructor does plus something more", and we want that
+destructor to be virtual.  Here is how this is done:
+
+	struct A {
+		ctor (int);
+	virtual	dtor ();
+	};
+
+	struct B : A {
+		ctor (int);
+		dtor ();
+	};
+
+	B.ctor (int x)
+	{
+		((A*)this)->ctor (x);
+		// do something more
+	}
+
+	B.dtor ()
+	{
+		(*(A*)this).dtor ();
+		// do something more
+	}
+
++[lwc 1.2]: It is possible to call functions of parent classes
+  with the syntax 'class.func()'. The above example would be:
+
+	B.ctor (int x)
+	{
+		A.ctor (x);
+		// do something more
+	}
+
+
+8. Automatic destruction of locals
+----------------------------------
+
+  To take a break from this exhausting course, we shall now relax and enter
+a lighter subject which is easy and fun to read.  This is called automatic
+destruction of locals and as the name suggests describes how local objects
+are automatically dtored when local scopes close.  This indeed happens in
+lwc.  What also happens is that:
+
+	struct A {
+		dtor ();
+	};
+
+	struct B {
+		A includes_A;
+	};
+
+	int test ()
+	{
+		B b;
+		if (0) {
+			A a;
+			return 0;
+		}
+	}
+
+Some more C commands will be appended to the destructor of B so that it
+will call the destructor for the 'includes_A' object.
+
+Automatic destruction does not happen for object allocated with localloc.
+
+
+9. Decorative Features
+----------------------
+
+  In lwc, the keyword "class" is a synonym for "struct".  Also, inside
+structure declarations the labels "public:" and "private:" are valid
+and they will disappear.  Unlike C++, there are no access modifiers.
+Some experts believe that the C++ access modifiers are a waste of
+time since they have no impact on the resulting code.
+
+In lwc, access modifiers are absent.  For example:
+
+	class A {
+		int x, y;
+	    public:
+		A ()	{ x = y = 0; }
+	};
+
+The members x and y are not *really* restricted.  Only conceptually.
+You can use 'private:' and 'public:' as high-level comments, instead
+of:
+	/* These functions are internal */
+and
+	/* These functions are the interface of the object */
+
+Afterall, the above example, is definatelly nicer.
+
+
+10. Multiple Inheritance
+------------------------
+
+  You can achieve multiple inheritance in lwc as in C++.  However, the
+question is "when" should multiple inheritance be used.  With multiple
+inheritance you can combine the properties of two objects, but there are
+often other ways to do that.  Multiple inheritance is useful when these
+alternatives are not possible.  As a quick rule, ``multiple inheritance
+makes sense when the objects have common members''.  Until now the only
+possible common member is 'this'.
+
+Supposing we want to "combine" the properties of objects A and B.
+These are the possibilities:
+
+	// 1
+	class C : A {
+		B b_tool;
+	};
+
+	// 2
+	class C : B {
+		A a_tool;
+	};
+
+	// 3 - multiple inheritance
+	class C : A, B {
+	};
+
+If [1] or [2] work, then they should be preferred.  If, for example, either
+A or B use "this" to store the object in a linked list, then multiple
+inheritance is the choice.  Another case for [3] is when you want to
+redeclare virtual functions of A to use members of B AND redeclare
+virtual functions of B to use members of A.
+
+In short, there's no need to use multiple inheritance if you don't
+really know you need it.
+
+
+11. Virtual Inheritance
+-----------------------
+
+  Remember when we said that multiple inheritance makes sense when
+there are common members? Virtual inheritance makes this possible
+as for virtually inherited objects, a common instance will be
+shared among the derrived objects.
+
+  WIth virtual inheritance you can do "diamond" hierarchies.
+Virtual inheritance only makes sense with multiple inheritance and
+most of the times with pure virtual functions.
+
+Example:
+
+	struct A {
+		int x;
+	};
+
+	struct B : virtual A {
+	};
+
+	struct C : virtual A {
+	};
+
+	struct D : B, C {};
+
+In this example, because of virtual inheritance only one A exists
+in D.  In order to do that, the objects B and C do not inherit A
+directly but they have a pointer to it.  In the case of D, these
+two pointers point to the same location.
+
+However, now it is not possible to downcast from A to B or C.
+Because downcasting is necessary for redeclared virtual functions,
+Runtime Type Information (RTTI) is implemented.  This is special
+entries in the virtual table which include the downcast data.
+
+In the previous example, A does not have a virtual table and
+therefore rtti is not available.  lwc, like C++, will complain
+if you try to downcast from the virtual base class to a derrived class.
+
+
+12. Pure Virtual Functions
+--------------------------
+
+  Pure virtual functions are declared as in C++ and the main puprpose
+is for the combination of virtual tables in multiple virtual inheritance.
+For example:
+
+	struct A {
+	virtual int f1 () = 0;
+	virtual int f2 () = 0;
+	};
+
+	struct B : virtual A {
+		int f1 ();
+		// f2 is still zero
+	};
+
+	struct C : virtual A {
+		// f1 is still zero
+		int f2 ();
+	};
+
+	struct D : B, C {};
+
+D will inherit two virtual tables, one from B and one from C.
+However because of virtual inheritance these two point to the
+same thing.  For that their values are combined.  When a pure
+virtual function is combined with a non-pure virtual function,
+the non-pure one wins.  In the above example, the virtual table
+of D has a pointer to f1 as declared in B and a pointer to f2
+as declared in C.
+
+It is possible that both functions will be non-pure.  What happens
+in this case is that combination is impossible since there is
+no unique final overrider.  C++ will complain.  lwc will only
+complain if you attempt to instantiate such an object.
+
+
+13. Benefits of Pure Virtual Functions
+--------------------------------------
+
+  If an object has pure virtual functions, it can't be instantiated
+(you can't have variables of this type).  As a result no virtual
+table instance is emitted, which saves space.  Pure virtual functions
+are good for ``interface'' objects: if you want to make a library
+that operates on an interface object and force the programmer to
+implement specific versions of the pure virtuals in derrived classes.
+
+
+14. Templates
+-------------
+
+ [Note: In lwc version 0.7.3, generic programming is implemented
+  with 'abstract template classes' and 'local typedefs'.
+  See the document 4.3.generic-programming
+  The templates presented here, still apply as multi-line macros]
+
+  With templates we can achieve "type polymorphism".
+This is one way to see things.  The bottomline is that code
+which uses different types is different code and eventually
+C++ redefines the template code each time a template is
+instantiated.  In lwc, templates are implemented as part
+of the advanced laguage macro facilities.
+
+  A template is a multiline macro whos body is enclosed in
+braces.  With such high-level multiline macros it is possible
+to achieve "type abstraction", "generic programming" to the
+basic level.  STL would probably be impossible to implement
+with this kind of templates.
+
+Example:
+
+	template container(classname, type, MAX) {
+
+		class classname {
+			type arr [MAX];
+			int top;
+			type sum ();
+		};
+
+		type classname.sum ()
+		{
+			int i, t = top;
+			type s = 0;
+
+			for (i = 0; i < t; i++)
+				s += arr [i];
+			return s;
+		}
+	}
+
+If we instantiate the container with:
+
+	container (intcontainer, int, 100)
+	container (floatcont, float, 200)
+
+And have some basic template functionallity which is
+good enough for people who like to write their own
+libraries.
+
+Notice that in the example will instantiate both the interface
+and the implementation.
+Usually, you will need to separate these two with two different
+templates, one container_interface which includes the class
+declaration and another one container_implementation which icludes
+the member function definitions.  The former will be instantiated
+in the header file and the latter in a source file.
+
+
+15. More Templates
+------------------
+
+  A template argument may be multiple tokens.  For instance,
+you can say:
+
+	node (char *, strcmp (a templ_comma b templ_parenth)
+
+A comma may be passed with the special token "templ_comma" and a
+closing parentheses with "templ_parenth".  So the in the above
+instantiation the two arguments are:
+
+	char*
+and:
+	strcmp (a, b)
+
+It is possible to concatenate tokens during the template expansion.
+The operators for that are "><" and they will concatenate adjustent
+identifiers, reserved words and values.  For example:
+
+	template TT (X, Y) {
+		X >< _Query_ >< Y >< _32
+	}
+
+	TT (+strcmp, x * y)
+
+Will be expanded to:
+
+	+ strcmp_Query_x * y_32
+
+Just remember that all this is still experimental.
+
+
+
+Lightweight C++ - New Features
+==============================
+
+Now we'll see some of the innovative features of lwc.
+
+0. Structures by Reference
+--------------------------
+
+  In lwc, all structures are passed by reference. Experience
+has shown that we almost never have to pass structures by value.
+The main reason is that it's very boring typping '->' all the
+time for structure arguments (which are very frequent in C).
+
+For example, the program:
+
+	struct A {
+		int x, y;
+	};
+
+	int f (A a)
+	{
+		a.x += a.y;
+	}
+
+Will produce the C code:
+
+	struct A {
+		int x, y;
+	};
+
+	int f (struct A *a)
+	{
+		(*a).x += (*a).y;
+	}
+
+The interesting thing is that a both a structure and a pointer to a
+structure can be passed to such a reference argument and the lwc
+compiler will make the necessary conversions each time.  For example:
+
+	int test ()
+	{
+		A a, *ap;
+
+		f (a);		// ok
+		f (ap);		// ok
+	}
+
+Will produce the C code:
+
+	int test ()
+	{
+		struct A a, *ap;
+
+		f (&a);
+		f (ap);
+	}
+
+This feature breaks the compatibility with existing C libraries, but
+structure-by-value arguments are very rare anyway.
+
+
+1. Virtual Constants
+--------------------
+
+  Virtual constants are variables placed in the virtual table.
+The polymorphism is achieved by different initialization of
+these variables, which takes place in the structure declaration.
+For example:
+
+	struct A {
+	virtual int age, times;
+	virtual char *name, *msg;
+		void doit ();
+	};
+
+	void A.doit ()
+	{
+		int i;
+		printf ("Name: %s, age: %i\n", name, age);
+		for (i = 0; i < times; i++)
+			printf ("%s\n", msg);
+	}
+
+In this example, A.doit() is a polymorphic function since it's
+operation is depending on virtual things.  Here are some examples
+of polymorphism on the above:
+
+	struct GradeA : A {
+		int age = 12;
+	};
+
+	struct Bob : GradeA {
+		char *name = "Bob";
+		char *msg = "Hi, my name is bob and I wrote my name with sausages";
+		int times = 10;
+	};
+
+	struct AAPerson : A {
+		char *name = "Art attack person";
+		int age = 27, times = 4;
+		char *msg = "Try it yourself!";
+	};
+
+	int test ()
+	{
+		Bob bob;
+		AAPerson aap;
+
+		bob.doit ();
+		aap.doit ();
+	}
+
+Since these virtual variables are placed in the virtual table, they
+do not increase the size of the structure.
+
+Virtual constants are very useful in implementing the "static members"
+of C++.  In C++, static members are common among all the instances
+of a class and -unfortunatelly- all their ancestors.  As a result,
+static members in C++ are only useful when used together with
+access control (private, public, friend, etc) to hide a global variable.
+In lwc, with virtual constants it is possible to select among which instances
+a global variable will be common.  For example:
+
+	static int counter1, counter2;
+
+	struct A {
+	virtual int *counter = &counter1;
+		ctor ()		{ (*counter)++; }
+		dtor ()		{ (*counter)--; }
+	};
+
+	struct B : A {
+		B ()	{ ((A*)this)->ctor (); }
+		~B ()	{ ((A*)this)->dtor (); }
+	};
+
+	struct C : B {
+		int *counter = &counter2;
+		C ()	{ ((B*)this)->ctor (); }
+		~C ()	{ ((B*)this)->dtor (); }
+	};
+
+In this example, instances of A and B are counted in the global
+variable counter1, while instances of C are counted in counter2.
+
+[NOTE] With virtual variables you can implement typeID and class
+variables which are often said to be very advanced features of
+object oriented languages, missing from C++ (like objc and dylan).
+
+
+1b. Virtual Variables
+---------------------
+
+  In reallity, virtual constants are not really constant.  You can
+assign values to them.  They are guaranteed to be common among all the
+instances of an object, but not of derrived or base classes.
+
+
+2. Do Without While
+-------------------
+
+  In lwc you can use a "do" without "while".  This is a loop that falls
+through only once but is sensitive to "continue" and "break".
+For example:
+
+	do switch (letter [i++]) {
+		case '\t': ++tabs;
+		case ' ':
+			continue;
+		case '\n':
+			++lines;
+			continue;
+	}
+
+In the above example the loop will iterate with "continue" as long as the
+current letter is whitespace.  Also:
+
+	do {
+		if (condition ())
+			break;
+		do_something ();
+		if (condition2 ())
+			break;
+		do_something2 ();
+	}
+
+
+3. Swich (declaration)
+----------------------
+
+  The expression of 'switch' can be a declaration.  That is mainly useful
+for the "default" label which may need to known which was the value that
+led to it.
+Example:
+
+	switch (int x = get_letter ()) {
+		case '+': add (); break;
+		case '-': sub (); break;
+		case '*': mul (); break;
+		case '/': div (); break;
+		default:
+			if (isdigit (x)) do_something (x);
+			else if (invalid (x)) error (x);
+			x = 122;	// possible
+	}
+
+To do this right, normally there shall be the declaration of only
+one variable of integral type.  Otherwise lwc is free to emit whatever
+it wants at random.
+
+
+4. Requesting the Generation of Virtual Tables
+----------------------------------------------
+
+  The keyword "virtual;" can appear in a structure declaration to
+request the generation of a virtual table for the specific class.
+As a result the size of the structure will be increased by one
+pointer.  This is only useful in the cases of virtual inheritance.
+Two examples:
+
+	struct A {
+		virtual;
+		int x, y;
+	};
+
+	struct B : virtual A {
+	};
+
+Normally, in the above case, A does not have a virtual table
+and as a result there is no RTTI and downcast from A to B is impossible.
+By requesting the generation of a virtual table in A, we also
+make RTTI available.  Also:
+
+	struct A {
+	virtual int f ();
+	};
+
+	struct B : virtual A {
+		virtual;
+	virtual int k ();
+	};
+
+In this case, normally the virtual function k would be placed in the
+virtual table inherited from A.  However, now 'k' will be placed in
+the virtual table of B.  This happens because the lwc compiler will
+decide that the virtual table of B is a better choice to add new
+entries since it can be accessed directly and not through a pointer
+indirection (remember that B has a pointer to the A instance and
+in order to get to the virtual table of A we have to do:
+this->A_InHeRiTeD->_v_p_t_r_).
+
+
+5. Inlined Virtual Table
+------------------------
+
+  It is possible to request an alternative organization of the virtual
+table with the declaration "inline virtual;" in the body of a struct.
+In this case the structure will include the entire virtual table instead
+of a pointer to it.  This is a memory/speed tradeoff as the size of
+the structure will increase and calling virtual functions will be
+faster since there will be no need for pointer indirection.
+Such a declaration is:
+
+	struct A {
+		inline virtual;
+	virtual	int f ();
+	};
+
+In this case, the virtual functions will exist as good old pointer
+to function members of structure A.  Everything will work as expected
+except virtual variables which will no longer be common among the
+instances, and which in this case doesn't make much sense using.
+
+This does not apply to inherited virtual tables.  For lwc, an
+inlined virtual table is the best place to add new entries.
+Example:
+
+	struct A {
+	virtual int f ();
+	};
+
+	struct B : A {
+		inline virtual;
+	virtual	int f ();
+	virtual	int k ();
+	};
+
+Here, k() will be placed in the inlined virtual table of B.
+On the other hand, f() is an inherited entry of the virtual
+table of A and will remain there.
+
+
+================================
+	Random Notes
+================================
+
+0. Virtual Tables:
+-----------------
+
+  Virtual tables are generated in each object file and
+placed in linkonce linker sections.  Currently, the
+".gnu.linkonce" section is used.  MS executable format
+also has its own linkoce sections, but not supported
+yet.
+
+
+1. Aggregate Initializers for Local Objects
+-------------------------------------------
+
+Structures that have parents or a virtual table can ONLY
+be initialized with designators: You are not supposed to
+know how the parent members are arranged in memory.
+C++ forbids initialization entirely.  lwc allows it
+as long as designators are used for all the values.
+
+	struct A {
+		int x, y, z;
+	};
+
+	struct B : A {
+		int i, j, k;
+	};
+
+	int test ()
+	{
+		B b = { .x = 1, .y = 2, .i = 3 };
+		B b2 = { 1, 2, 3, 4 };	// error!
+	}
+
+
+2. Virtual Inheritance:
+----------------------
+
+  You can't memcpy objects with virtual base classes.
+The pointers to the shared instances are not position
+independent.  Assignment is not possible either.
+Objects with virtual base classes are algorithms,
+not data structures.
+
+So for objects with virtual base classes, use 'new' to
+allocate them and a 'copy' member function to copy
+their members one-by-one if you need to duplicate
+such an object in memory.
+
+
+3. Structure by reference:
+-------------------------
+
+  In lwc, all structures are passed by reference.
+As a consequence, this breaks compatibility with
+existing C libraries that pass structures by value.
+Currently no such function has been found -which
+proves that probably this is "the right thing"-
+
+In any case, be doubly careful when using C libraries.
+If a function uses a structure by value, you'll need
+to write a wrapper in C and add it to the library.
+For example:
+
+	extern int C_library_function (struct xxx);
+
+	int my_wrapper_function (struct xxx *x)
+	{
+		struct xxx tmp = *x;
+		return C_library_function (tmp);
+	}
+
+	extern int my_wrapper_function (struct xxx *);
+
+Then from lwc programs, use my_wrapper_function instead
+of the actual library function.
+
+[In lwc version 0.7.3]:  for declarations included in
+extern "C" {}, or extern "header" {} regions,
+structures are passed by value. This can give useful
+warnings.
+
+
+
+4. Function overloading:
+------------------------
+
+  Function overloading happens only when a function
+is redeclared with different arguments.  In this case
+the name of the function is changed to another name
+which also describes the argument types.
+
+As a consequence, files which define/call overloaded
+functions must know that there are more than one
+prototypes in order to use the overloaded version
+of the function name.  You will understand when this
+happens if the if linker complains about undefined
+functions. For example:
+
+	# file1.c
+	int foo (int x)
+	{
+		return x *= x;
+	}
+	int foo ()
+	{
+		return 65536;
+	}
+
+	# file2.c
+	extern int foo (int);
+	int bar ()
+	{
+		return foo (23);
+	}
+
+The above program will fail at the stage of the linker.
+file2.c does not know that foo is an overloaded function
+and will not use the special name which describes the argument
+types.  The correct way is to also inlcude the prototype for
+"int foo ()" in file2.c
+
+
+5. Virtual Inheritance:
+-----------------------
+
+  Unlike C++, lwc does not complain if a virtual function has
+no unique final overrider in virtual inheritance, as long as
+a class is not instantiated.  For example:
+
+	struct A {
+	virtual int f () = 0;
+	};
+
+	struct B : virtual A {
+		int f ();
+	};
+
+	struct C : virtual A {
+		int f ();
+	};
+
+	struct D : B, C {};
+	struct E : D {
+		int f ();
+	};
+
+C++ will complain that the object of type D is impossible.
+Lwc will only complain if you attempt to make an instance of D,
+but otherwise it's Ok to make instances of E.
+
+
+6. Templates:
+-------------
+
+  Currently, templates may not be nested.  A template cannot
+declare or use another template.  This may be changed in the
+future.
+
+
+7. Everybody's Favorite Addition
+--------------------------------
+
+  Borrowed from C++, the final statement of main() is
+automatically "return 0;".
+
+
+8. Nested classes
+-----------------
+
+  The nested classes in C++, since the inner class cannot access the
+members of the enclosing class, make only sense when used together with
+access control.  lwc has no access control so declaring structures inside
+structures makes no sense, unless objects are declared.
+
+  lwc does not accept abstract declarations inside structures.
+
+	struct A {
+		int x;
+		struct B {
+			int x, y;
+		};
+	};
+
+  In the above example, the declaration of struct B does not also declare a
+member of this type for struct A.  The lwc compiler will complain.  Whether
+A or B have member functions and are named 'class', does not fix the
+situation.
+
+
+9. Unsupported
+--------------
+
+  In the case:
+
+	struct A {
+		int f ();
+	};
+
+	int test ()
+	{
+		A a;
+		(a.f) ();
+	}
+
+It will not work.  The member function call will not be detected if
+it is in parentheses.  This can be fixed, but the above expression is
+pointless:  There is no real member called 'f' in the structure and
+you can't do anything with it that needs enclosing it in parentheses.
+
+So this is not actually a bug.  It's a feature!
+
+
+10. Member functions Hack
+-------------------------
+
+  It is possible only to define and not declare member functions.
+Example:
+
+	class A {
+		int x, y;
+	};
+
+	int A.foo ()
+	{
+		return y = x++;
+	}
+
+The difference is that files that see the declaration of A but not
+the definition of A.foo, will ingore its existance.  Cool or what?
+
+With this feature it is possible to have real private functions and
+real access control.  For example,
+
+	# header file
+	class A {
+		int do_something ();
+	};
+
+	# source file
+	static int A.private_func ()
+	{
+		/* ... */
+	}
+
+	int A.do_something ()
+	{
+		private_func ();
+		/* ... */
+	}
+
+Outsiders can't call the private_func() member.
+
+
+11. Class Declarations in Code
+------------------------------
+
+  Because in lwc functions are parsed after all declarations have
+been parsed, this is impossible:
+
+	int foo ()
+	{
+		class X {
+			int f ();
+		};
+	}
+
+	int X.f () { }
+
+If f() is an inlined function defined inside the class declaration
+it *may* work.  However the rule in lwc is: ``All Classes SHOULD be
+declared in the GLOBAL scope''.  Function scopes is not a good place
+to introduce new types.
+
+Expressions are a terrible place to declare new structures too.
+This goes for 'statements in expressions'.  In the code below
+
+	x = ({ class B : A { }; B b; b.x; });
+
+lwc may seriously freak out.  It may work but don't send bug reports
+if lwc does weird things.  Be doubly careful with 'specialize' because
+in reallity it declares a new class.
+
+
+12. Default Arguments and Virtual Functions:
+-------------------------------------------
+
+  If a virtual function has default arguments, then the virtual version
+of the function will be called ONLY when all the arguments are supplied.
+Otherwise, the member function will be called.  For example:
+
+	struct A {
+		virtual int f (int, int=24);
+		int k ();
+	};
+
+	int A.k ()
+	{
+		f (12, 13);	// ok will call this->_v_p_t_r_->A_fViRtUaL
+		f (12);		// will call the member function.
+	}
+
+In the above example, the second call will always call the member function
+f of the structure A, even if a derrived class redeclares f.
+I have no idea why this happens...... :)

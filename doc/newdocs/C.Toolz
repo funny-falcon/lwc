@@ -1,0 +1,14 @@
+
+the lwc program would have been impossible without
+the valgrind memory error detector for x86 GNU/Linux.
+
+Many thanks to Julian Seward.
+
+
+the ncc source code analyser has been very useful
+hacking and rewritting parts of lwc.
+
+
+gcc's extensions have been very important in making
+it possible. gcc's optimizations roX0rz
+

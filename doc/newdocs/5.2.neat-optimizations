@@ -1,0 +1,143 @@
+
+Neat optimizations lwc can do with virtuals
+===========================================
+
+  Often in OOP we have derrived classes which act only
+as "virtual table generators" and add no new data to the
+derrived class (member functions do not increase the size
+of the object).  In fact a derrived class which only redefined
+virtual functions, is not different from the base class --
+only their virtual tables are different.
+
+In lwc, derrived classes that :
+	- do not add new data members,
+	- are derrived from single inheritance or from
+	   the same base class,
+	- have no virtual table of their own,
+are optimized.  The optimization actually does:
+
+	 "typedef struct Base Derrived;"
+
+instead of declaring the derrived object.
+
+The effect is most amazing in virtual inheritance.
+You can see the output from the two different cases:
+In the first the derrived objects have data members and
+ the optimization is not done. In the second it is.
+
+//======== Version 1: No optimization ==========
+
+class bb {
+	int i;
+virtual int h () = 0;
+virtual int w () = 0;
+	int doit ()
+	{
+		return h() + w() + i;
+	}
+};
+
+class h1 : virtual bb {
+	int v1;
+	int h ()	{ return 1; }
+};
+
+class h2 : virtual bb {
+	int v2;
+	int h ()	{ return 2; }
+};
+
+class w1 : virtual bb {
+	int v3;
+	int w ()	{ return 1; }
+};
+
+class w2 : virtual bb {
+	int v4;
+	int w ()	{ return 2; }
+
+};
+
+class h1w2 : h1, w2 {
+	int vv1;
+};
+class h2w2 : h1, w2 {
+	int vv2;
+};
+
+//=============================================
+//*********************************************
+//=========== Version 2: optimized ============
+
+class bb {
+	int i;
+virtual int h () = 0;
+virtual int w () = 0;
+	int doit ()
+	{
+		return h() + w() + i;
+	}
+};
+
+class h1 : virtual bb {
+	int h ()	{ return 1; }
+};
+
+class h2 : virtual bb {
+	int h ()	{ return 2; }
+};
+
+class w1 : virtual bb {
+	int w ()	{ return 1; }
+};
+
+class w2 : virtual bb {
+	int w ()	{ return 2; }
+
+};
+
+class h1w2 : h1, w2 {};
+class h2w2 : h1, w2 {};
+
+//======================================
+
+
+  The classes h1, h2, w1, w2 are just used to set the values
+of the virtual table slots, and the classes h1w2, h2w2, h2w1,
+are just used to combine these values and result in the
+combined virtual tables.  But the final object is really
+a 'bb' base class.  Therefore the lwc compiler whenever you
+request the allocation of a h1w2, will simply allocate a
+'bb' structure and assign a h1w2 virtual table to it.
+
+  It is important to know that because you can select a
+different organization of your program to entirely avoid
+the virtual inheritance overhead:  Put all the data in the
+base class (even data that was supposed to appear in derrived
+classes), and have derrived classes with function members
+only.
+
+  A logical consequence is that virtual inheritance is not
+really gone;  it may reappear later.  For example, 
+
+	class A {
+		int i;
+	virtual	int f ();
+	};
+	class B : virtual A {
+		 int f ();
+	};
+	class C : B {
+		int j;
+	};
+
+Here, class B is just an alias of class A.  But class C
+is a class where A is a virtual parent.  So in the end,
+virtual inheritance appears in the B->C inheritance.
+(this is important if you're using virtual inheritance
+ declarations as described in 2.2.virtual-inerit-dcl)
+
+---
+Finally, this optimization also happens in non-virtual
+inheritance.  The effect is to avoid some downcast dispatch
+functions and make the code smaller and faster.

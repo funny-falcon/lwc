@@ -1,0 +1,174 @@
+
+In external documents you can find info on
+operator overloading and generic programming with template
+classes and local typedefs.
+
+1. Functions returning References
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  Functions can return a reference to a type.
+In this case, the function call is an lvalue
+and can be in the left part of an assignment.
+For example:
+
+	int array [100];
+	int *extended;
+
+	int & nth (int n)
+	{
+		if (n < 100)
+			return array [n];
+		return extended + n - 100;
+	}
+
+	int main ()
+	{
+		nth (10) = nth (20) = -1;
+	}
+
+A function returning a reference, in reallity returns
+a pointer and the lwc compiler adjusts that the pointer
+is lvaluated in the expression.  In the return statement
+a function returning a reference may return an object or
+a pointer to an object.  The lwc compiler will make
+the neccessary adjustments.
+
+  Overloading the array operator for structures in
+simplified with references:
+
+	class A {
+		float t [100];
+		float& operator [] (int i)
+			{ return t [i]; }
+	};
+
+	int main ()
+	{
+		A a;
+		a [12] = a [22] = -1;
+	}
+
+
+2. Boolean toggle operator
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  lwc supports the exclamation operator '!!' in prefix
+and postfix mode.  This operator will perform a boolean
+negation to the operand (which must be modifiable therefore).
+In the prefix mode, the result of the expression will
+be the negated value, while in postfix the negation will
+happen afterwards.
+
+	int main ()
+	{
+		bool b = false;
+		printf ("%i\n", !!b);
+		printf ("%i\n", b);
+		printf ("%i\n", b!!);
+		printf ("%i\n", b);
+	}
+
+
+3. Class Declaration Qualifiers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When the declaration qualifiers (specifiers) 'static', 'inline',
+'virtual' and 'auto' precede the declaration of a class,
+they apply for all member functions.  In the example below,
+all member functions of 'A' will have internal linkage:
+
+	static class A {
+		int foo ();
+		int bar ();
+	};
+
+'static' is useful to the underlying C compiler to inform internal
+linkage (may save some space in the object file).
+'inline' is the hint that the C compiler should attempt to inline.
+'virtual' means that all member functions are virtual!
+'auto' means that all the functions are automatically redefined
+in each derrived object!
+
+those qualifiers are not inherited to member functions declared
+in derrived classes.
+
+
+4. Proper destruction (II)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the cases of virtual inheritance, it is normally impossible to
+delete an object by the address of the base object.  It is also
+impossible to delete an object in multiple inheritance by the
+address of a base object not first in inheritance.  These will
+produce a segfault (in c++ too):
+
+	class A {};
+	class B {int i;}
+	class C: B, A {};
+
+	class V {};
+	class V1 : virtual V {int i;}
+	class V2 : virtual V {int j;}
+	class VV : V1, V2 {};
+
+	int main ()
+	{
+		A *a = new C;
+		V *v = new VV;
+
+		delete a;	// crash!
+		delete vv;	// crash!
+	}
+
+lwc calls free() with the address returned from the
+destructor function.  So these can be resolved with auto
+virtual destructors.
+
+	class A {
+	auto virtual ~A () {}
+	};
+
+will do the job....
+
+destructors, transparently return 'this'.  If you return
+some other value, you're on your own.  This could be useful?
+
+
+5. tmp structure addresses
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is useful internally for the operator overloading,
+but it works in general.  Sample case:
+
+	struct A {
+		int i;
+	};
+
+	void foo (A a)
+	{}
+
+	A baz ()
+	{
+		A a;
+		return a;
+	}
+
+	int main ()
+	{
+		foo (baz ());
+	}
+
+Normally, because structures are passed by reference,
+foo really takes a pointer.  But the memory of the structure
+returned by baz, is totally temporary and the C compiler
+will refuse to get it's address.  lwc works around this
+by calling an intermediate 'trampoline' function.
+
+
+6. linkonce specifier
+~~~~~~~~~~~~~~~~~~~~~
+
+  lwc supports the storage class specifier 'linkonce' for
+functions.  A function declared linkonce, will have a special
+linkage in its own section.
+

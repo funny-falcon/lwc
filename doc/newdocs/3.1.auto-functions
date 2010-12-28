@@ -1,0 +1,395 @@
+
+Auto virtual functions
+======================
+
+  Generally, the main objective with object oriented programming is
+the puzzle of maximum code reuse.  However this is often contradictory
+to optmimzation which is best achieved with code expansion.
+Suppose this example:
+
+	class A {
+	virtual int f ()	{ return 1; }
+		int k ();
+	};
+
+	int A.k ()
+	{
+		int i, s;
+
+		for (s = i = 0; i < 1000; i++)
+			s += f ();
+
+		return s;
+	}
+
+	class B : A {
+		int f ()	{ return 2; }
+	};
+
+"A.k" is a polymorphic function which will call "f" virtually
+and depending on the type of the current object.  This code
+also achieves maximum code resuse.  However, virtual calls
+which are calls of pointers to functions, cost (almost as
+much as an "if" statement).  Thus the sample code is not very
+efficient because it will call 1000 times pointers to functions;
+inlining is not even remotely possible.
+
+  This is the role of "auto virtual" member functions.
+``If an auto virtual member function is not redefined by the
+programmer in a derrived class, the lwc compiler will automatically
+redefine the function by its most recent definition.''
+With this condition, since a different definition exists for
+each derrived class, the function does not have to call virtual
+functions virtually: it knows and calls the versions of its type.
+
+Check out the output of this example:
+
+	class A {
+	virtual int f ()	{ return 1; }
+
+	auto virtual int k ();
+	};
+
+	int A.k ()
+	{
+		int i, s;
+
+		for (s = i = 0; i < 1000; i++)
+			s += f ();
+
+		return s;
+	}
+
+	class B : A {
+		int f ()	{ return 2; }
+	};
+
+Here there are two "k" functions defined. "A.k" and "B.k".
+A.k calls A.f and B.k calls B.f, very possibly inlined.
+
+This is close to templates and generic programming.
+
+
+Advantages
+~~~~~~~~~~
+
+  Auto virtual functions, because of the code expansion,
+are very virtuous.  Things that are affected and optimized
+include (generally anything related to dynamic polymorphism)
+
+	- virtual calls are direct member calls
+	- virtual variables are accessed directly from
+	  the global virtual table instance
+	- in virtual inheritance, paths to members of
+	  virtual base class go directly to the
+	  apropriate common instance.
+
+Also, class constants are reevaluated.
+
+
+Static locals
+~~~~~~~~~~~~~
+
+  static local variables in auto functions are not common between
+all of them.  They are only common between all the instances of
+a class. (DH)
+
+
+Compile-time Polymorphism
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+As a matter of fact, if in the above example, "k" is the only
+place that calls "f", f does not need to be virtual.
+The code will work as well with:
+
+	class A {
+		int f ()	{ return 1; }
+	public:
+
+	auto
+	virtual int k ();
+	};
+
+	int A.k ()
+	{
+		int i, s;
+
+		for (s = i = 0; i < 1000; i++)
+			s += f ();
+
+		return s;
+	}
+
+	class B : A {
+		int f ()	{ return 2; }
+	};
+
+Which shows that auto virtual functions are pretty good for
+compile-time polymorphism.
+
+
+Finally, auto virtual functions can be just auto functions.
+We started with virtuallity because that made more sense.
+In practice, if a normal member function calls an auto function,
+the auto function _should_ be virtual; if not it isn't what
+you want probably.
+
+
+Pure virtual
+~~~~~~~~~~~~
+
+Auto functions work with pure virtual functions and the
+right combinations are done in diamond hierarchies.
+For example:
+
+	class A {
+	auto	int f () = 0;
+	};
+
+	class B : virtual A {
+		int f ();
+	};
+
+	class C : virtual A {};
+
+	class D : B, C {};
+
+Here, class D gets the definition of "B.f".
+
+
+Pure non-virtual
+~~~~~~~~~~~~~~~~
+
+Because of compile-time polymorphism, lwc accepts pure non-virtual
+functions.  An auto function which calls a pure function emits
+no code.  So in the code below, no code for A.k() is generated
+because it shouldn't be called.
+
+	class A {
+		int f () = 0;
+	auto
+	virtual int k ()	{ return f (); }
+	};
+
+The 'pure function' specifier in this case is a hint for the auto
+functions calling it, only.
+
+
+Code Elimination 1
+~~~~~~~~~~~~~~~~~~
+
+ The lwc preprocessor studies a call-graph of auto-functions calling
+other auto-functions to avoid emitting code which shouldn't be called
+because of pure functions (virtual or not).  This can lead to linker
+errors.  For example:
+
+	// Header file H.h
+	class A {
+		int f () = 0;
+	auto	int a1 ();
+	auto	int a2 ();
+	}
+
+
+	// File M1.c
+	#include "H.h"
+	int A.a1 ()
+	{
+		return f ();	// pure! no definition emitted for a1!
+	}
+
+	// File M2.c
+	#include "H.h"
+	int A.a2 ()
+	{
+		return a1 ();	
+	}
+	int main () {}
+
+Here, in the compilation of file M2.c, lwc doesn't know that no code
+is emitted for a1() and it will normally generate a2().  The point is
+that even if it did, and A.a2() was called, it would cause a segfault.
+
+
+
+Code Elimination 2
+~~~~~~~~~~~~~~~~~~
+
+ lwc compiler tries to be a wiseass and avoid redefining
+auto functions if none of the things they use has changed
+in the derrived class.  In the case:
+
+	class A {
+		int w ();
+	auto
+	virtual	int f ()	{ return w () - 10; }
+	};
+
+	class B : A {
+	};
+
+Because, function 'w' is the same in A and B, lwc will not redeclare
+the auto function f. It will just create a small optimizable version
+of B.f which dispatches control to A.f
+
+Things that affect whether an auto function is redefined are:
+
+	- all functions called are the same
+	- all the virtual constants used have the same value
+	- all virtual variables used belong in a constant
+	  virtual table or they are const, and they have the
+	  same initialization value.
+	- in virtual inheritance the same shared instances used.
+	- 'this' is not used.
+
+The latter check is interesting because the typeof 'this' is
+different for every auto function. For example a trick is:
+
+	class A {
+	auto virtual	int dynamic_sizeof () { return sizeof (*this); }
+	};
+
+lwc will redefine this function in every derrived class.
+
+If you see that lwc does not redefine an auto function while
+it should, the _lwc_config_ option "expand_all_auto" can be
+used to instruct the compiler to redefine all auto functions
+without the code elimination test.  (or put a dummy expression
+which uses 'this')
+
+
+Linkage & compilation
+~~~~~~~~~~~~~~~~~~~~~
+
+For the automatic redefinition to happen, the lwc compiler
+must know the original definition.  A problematic case is
+this:
+
+	// file: global.h
+
+	class A {
+	auto
+	virtual	int f ();
+	};
+
+	--------
+	// file: util.c
+	#include "global.h"
+
+	int A.f ()
+	{
+		return -1;
+	}
+
+	--------
+	// file: main.c
+	#include "global.h"
+
+	class B : A {
+	};
+
+
+Here file main.c does not see the definition of A.f and therefore
+it cannot redefine it.  The solution to this is: either put the
+declaration of 'class B' in the header file so a definition for
+'B.f' will be implemented in 'util.c' -OR- put the declaration
+of 'A.f' in the header file.
+
+For the latter to work, lwc always puts the code of auto functions
+in linkonce sections which can be collapsed by the linker. This however
+can lead to a new linker warning like this:
+
+	/usr/lib/gcc-lib/i486-linux/3.2/../../../../i486-linux/bin/ld: Warning: size of symbol
+				 `dbsFind_dbsTreeStr_mEmBeR' changed from 202 to 106 in lwclib.o
+
+The explanation is, that the object code for the auto functions
+is different in the object files.  This is because in one of them
+the compiler was able to inline code, while in the other it couldn't
+do that (because the definition of the inlined function was not
+available).
+
+We are looking into this. How can we instruct the linker to choose
+a specific (bigger/smaller) version ??
+
+Anyway, it is *generally* preferrable to put the declaration of 'class B'
+in the header rather the definition of 'A.f' in it, unless you're writting
+a precompiled library.
+
+
+
+
+Selective auto (experimental)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+[*advanced topic*] No need to read unless you know about it.
+
+Though auto functions produce much faster code, their code expansion
+may not be always desired.  Specifically, there may be classes where
+for 'some' derrived objects we want the auto-effect and 'other' derrived
+objects for which we prefer the maximum code re-use.  For a base class
+
+	class A {
+	virtual int f ();
+		int Do ();
+	};
+
+	int A.Do ()
+	{
+		for (int i = 0; i < 10000; i++)
+			f ();
+	}
+
+we may want to generate a derrived object 'B' which is very critical and
+we want 'Do' to be as fast as possible, and three derrived objects 'C', 'D'
+and 'E' for which the speed doesn't matter and we would like to avoid
+re-generating function Do() and go with good old virtual calls.  As of
+lwc version 1.2 this is possible with a special syntax: a function can
+be declared 'auto' in a derrived object and with definition just the name
+of the parent class.
+
+	class A {
+	virtual int f ()	{ return 1; }
+		int Do ();
+	};
+
+	int A.Do ()
+	{
+		f ();
+	}
+
+	class B : A {
+		int f ()	{ return 2; }
+
+		// Special Syntax Here!
+		// Make Do() auto-func and let it use definition
+		// from parent class 'A'
+	auto	int Do () { A }
+	};
+
+	class C : A {
+		int f ()	{ return 3; }
+	};
+
+	class D : A {
+		int f ()	{ return 4; }
+	};
+
+	int main ()
+	{
+		A a;
+		B b;
+		C c;
+		D d;
+
+		a.Do ();
+		b.Do ();
+		c.Do ();
+		d.Do ();
+	}
+
+Here, B.Do() is made an auto function which will get the definition from
+A.Do(); calls in B.Do are direct member calls, while in C.Do and D.Do
+do not override A.Do which has virtual calls.  Compiling the above with
+lwc will be the best for understanding what's happening.
+
+The syntax is rather ugly, so, um, this is experimental.
