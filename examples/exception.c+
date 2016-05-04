@@ -1,0 +1,27 @@
+int printf (const char*,...);
+
+void recur (int x)
+{
+	printf ("Entered %i\n", x);
+	if (x == 10)
+		throw 13;
+	recur (x + 1);
+}
+
+
+int main ()
+{
+	try {
+		printf ("try\n");
+		recur (0);
+		printf ("This is never reached.");
+	} else
+		printf ("caught exception\n");
+
+	// with value
+	try (int retcode) recur (0);
+	else printf ("caught exception retcode=%i\n", retcode);
+
+	// without else
+	try recur (0);
+}
