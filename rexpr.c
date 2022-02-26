@@ -331,12 +331,13 @@ static typeID expr_is_class (Token *e)
 
 static void check_pure_datam (typeID t, Token e)
 {
-	if (base_of (t) == B_PURE)
+	if (base_of (t) == B_PURE) {
 		if (objective.recording) {
 			usage_call_pure ();
 			raise_skip_function ();
 		}
 		else expr_errort ("Non-auto uses generic data member", e);
+        }
 }
 
 static void undo_declexprs (int);
@@ -356,7 +357,7 @@ typedef struct {
 
 static void dereference_call (rewrret *r)
 {
-	if (r->dferd = isreference (r->t)) {
+	if ((r->dferd = isreference (r->t))) {
 		r->t = ptrdown (dereference (r->t));
 		r->e = ptrize (r->e);
 		r->lvalue = true;
@@ -367,7 +368,7 @@ static bool MODE_DEREFERENCE;
 
 static void dereference_var (rewrret *r)
 {
-	if (r->dferd = isreference (r->t)) {
+	if ((r->dferd = isreference (r->t))) {
 		r->t = dereference (r->t);
 		if (!MODE_DEREFERENCE) {
 			r->t = ptrdown (r->t);
@@ -546,7 +547,7 @@ static Token *rewr_terminal (Token *e, rewrret *r)
 
 	/* Feature: not member function expr, but uses class consts */
 	if (top_scope)
-		if (r->e = maybe_class_const (e [0], r, current_scope [top_scope]))
+		if ((r->e = maybe_class_const (e [0], r, current_scope [top_scope])))
 			return r->e;
 	/* ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
 
@@ -834,8 +835,8 @@ static Token *rewr_new (bexpr *e, rewrret *r)
 
 	r->refalloca = alloc == INTERN_alloca;
 	must_ctor = e->expr [2] == '(' 
-			|| ISSYMBOL (e->expr [2]) && e->expr [3] == '('
-  			|| e->expr [2] != '[' && has_void_ctor (o);
+			|| (ISSYMBOL (e->expr [2]) && e->expr [3] == '(')
+  			|| (e->expr [2] != '[' && has_void_ctor (o));
 
 	Token tid = internal_identifier1 ();
 
@@ -1493,7 +1494,7 @@ again:;
 	}
 	/* ->->->->->->->->->->->->->->->-> */
 
-	if (throuptr && !isstructptr (R.t) || !throuptr && !isstructure (R.t)) err:
+	if ((throuptr && !isstructptr (R.t)) || (!throuptr && !isstructure (R.t))) err:
 		expr_error ("invalid object. Not a structure/pointer-to-structure");
 	obj = base_of (R.t);
 
@@ -1573,7 +1574,7 @@ again:;
 		return F->t;
 
 	/* if cant get address, dont */
-	if (tmpvs [0] = R.tmpv && (!path ? !throuptr : r == 1))
+	if ((tmpvs [0] = R.tmpv && (!path ? !throuptr : r == 1)))
 		argt [0] = ptrdown (argt [0]);
 
 	/* make room for the new argument */
@@ -1890,8 +1891,8 @@ static Token *rewr_fcall (bexpr *e, rewrret *r)
 				may_throw = true;
 			} else
 			/* Feature: overloading fcall operator () */
-			if (isstructure (r->t) || isstructptr (r->t)
-			&& has_oper_fcall (dbase_of (r->t))) ovrld_fcall: {
+			if (isstructure (r->t) || (isstructptr (r->t)
+			&& has_oper_fcall (dbase_of (r->t)))) ovrld_fcall: {
 				frealloc (&e->branch [0], 4);
 				sintprintf (e->branch [0], e->expr [0], isstructure (r->t) ?
 					    '.' : POINTSAT, RESERVED_oper_fcall, -1);
@@ -1960,8 +1961,8 @@ static Token *rewr_fcall (bexpr *e, rewrret *r)
 
 				if (isfptr (r->t)) r->t = ptrdown (r->t);
 				/* Feature: overload () on obj complex expr */
-				else if (isstructure (r->t) || isstructptr (r->t)
-				&& has_oper_fcall (base_of (r->t))) {
+				else if (isstructure (r->t) || (isstructptr (r->t)
+				&& has_oper_fcall (base_of (r->t)))) {
 					Token *nb = alloctok (intlen (sv1) + 6);
 					sintprintf (nb, ISTR (sv1),
 					    isstructure (r->t) ?  '.' : POINTSAT,

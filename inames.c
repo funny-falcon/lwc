@@ -110,7 +110,7 @@ static	intnode *mfn;
 	int bdi = c + 10000 * n;
 	intnode *N;
 
-	if (N = intfind (mfn, bdi))
+	if ((N = intfind (mfn, bdi)))
 		return N->v.i;
 
 	char tmp [512];
@@ -182,7 +182,7 @@ Token name_inherited (Token p)
 static	intnode *mfn;
 	intnode *N;
 
-	if (N = intfind (mfn, p))
+	if ((N = intfind (mfn, p)))
 		return N->v.i;
 
 	char tmp [512];
@@ -283,7 +283,7 @@ Token name_arrdtor (recID r)
 Token name_virtual_inner (recID r, recID r2, Token f, typeID t)
 {
 	char ts [256];
-	char tmp [128];
+	char tmp [512];
 
 	type_string (ts, t);
 	sprintf (tmp, "%s%s_%s%s_"VIRTFUNC_POST, expand (name_of_struct (r)),

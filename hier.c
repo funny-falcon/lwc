@@ -200,13 +200,12 @@ static inline bool vparent (int i)
 	return in2 (i, ASTATUS_VIRT, ASTATUS_VIRT2);
 }
 
-inline bool direct_ancest (ancestor*);
-#include "vtbl.ch"
-
-inline bool direct_ancest (ancestor *a)
+inline static bool direct_ancest (ancestor *a)
 {
 	return a->direct;
 }
+
+#include "vtbl.ch"
 
 static ctorable_t *add_ctorable (recID r)
 {
@@ -335,9 +334,9 @@ Token lookup_local_typedef (recID r, Token tn)
 	bool e = false;
 
 	ret = typedef_in (r, tn);
-	if (a = structs [r].ancestors)
+	if ((a = structs [r].ancestors))
 		for (; a->rec != -1; a++)
-			if (t = typedef_in (a->rec, tn))
+			if ((t = typedef_in (a->rec, tn))) {
 				if (ret) {
 					d2 = a->depth;
 					if (d2 < d) {
@@ -350,7 +349,7 @@ Token lookup_local_typedef (recID r, Token tn)
 					d = a->depth;
 					ret = t;
 				}
-
+                        }
 	if (e) expr_errort ("Ambiguous local typedef", tn);
 
 	if (ret && objective.recording)
@@ -660,11 +659,11 @@ static void study_destruction (recID r)
 			break;
 		}
 
-	if (a) for (i = 0; a [i].rec != -1; i++)
+	if (a) for (i = 0; a [i].rec != -1; i++) {
 		if (vparent (a [i].status)) v = true;
 		else if (direct_ancest (&a [i]) && has_dtor (a [i].rec)) 
 			b = true;
-
+        }
 	// - vdtor is the destructor that doesn't call the dtors
 	//   of the virtual base classes
 	// - idtor calls dtors of dtorable members and vdtors (or normal
@@ -1114,13 +1113,14 @@ static void inherit_auto_functions (recID);
 
 void set_parents (recID r, recID ps[])
 {
-	bool have_virtual_inh;
+	//bool have_virtual_inh;
 	recID collapsed [16];
 
 	if (ps [0] != -1 && !structs [r].notunion)
 		parse_error_ll ("union cannot be part of a hierarchy");
 
-	have_virtual_inh = make_ancestors (r, ps, collapsed);
+	//have_virtual_inh =
+        make_ancestors (r, ps, collapsed);
 	inherit_all_virtuales (r);
 	inherit_auto_functions (r);
 	inherit_class_consts (r);
@@ -1253,12 +1253,13 @@ typeID lookup_variable_member (recID r, Token m, Token *path, bool const_path, T
 	if ((a = structs [r].ancestors))
 		for (i = 0; a [i].rec != -1; i++)
 			if ((t = has_member (a [i].rec, m, p, &nglob)) != -1) {
-				if (rt != -1 || a [i].status == ASTATUS_FSCKD)
+				if (rt != -1 || a [i].status == ASTATUS_FSCKD) {
 					if (base_of (t) == B_PURE) continue;
 					else if (vptrm)
 						expr_errort ("Ambiguous vptr for class",
 							name_of_struct (r));
 					else expr_errort ("Ambigous member", m);
+                                }
 				rt = t;
 				if (glob_name) *glob_name = nglob;
 				nglob = 0;
@@ -1293,7 +1294,7 @@ void add_variable_member (recID r, Token m, typeID t, Token gn, bool constant, b
 		cc->obn = m;
 	}
 	if (!gn && !structs [r].constd)
-		if (constant || isstructure (t) && structs [base_of (t)].constd)
+		if (constant || (isstructure (t) && structs [base_of (t)].constd))
 			structs [r].constd = true;
 	member *M = (member*) malloc (sizeof *M);
 	M->m = m;
@@ -1424,7 +1425,7 @@ int inherited_flagz (recID r, Token f, typeID t)
 
 	for (; a->rec != -1; a++) {
 		cargv [0] = structs [a->rec].type_pthis;
-		if (p = xlookup_function_dcl (structs [a->rec].Funcs, f, cargv))
+		if ((p = xlookup_function_dcl (structs [a->rec].Funcs, f, cargv)))
 			flagz |= p->flagz;
 	}
 
@@ -1439,7 +1440,7 @@ int exported_flagz (recID r, Token f, typeID t)
 	funcp *p;
 	int ret = FUNCP_UNDEF;
 
-	if (p = xlookup_function_dcl (structs [r].Funcs, f, argv))
+	if ((p = xlookup_function_dcl (structs [r].Funcs, f, argv)))
 		ret = p->flagz & (FUNCP_CTHIS | FUNCP_MODULAR | FUNCP_AUTO);
 	free (argv);
 	return ret;
@@ -1461,12 +1462,12 @@ static bool _lookup_function_member (recID r, Token f, typeID argv[], flookup *F
 	recID rt = -1;
 	ancestor *a;
 
-	if (lt = has_fmember (r, f, argv, F))
+	if ((lt = has_fmember (r, f, argv, F)))
 		return true;
 
 	if ((a = structs [r].ancestors))
 		for (i = 0; a [i].rec != -1; i++)
-			if (lt = has_fmember (a [i].rec, f, argv, &tmp)) {
+			if ((lt = has_fmember (a [i].rec, f, argv, &tmp))) {
 				if (rt == -1 || isancestor (a [i].rec, rt)) {
 					if (a [i].status == ASTATUS_FSCKD)
 						goto really_fsckd;
@@ -1512,12 +1513,12 @@ Token lookup_function_member_uname (recID *r, Token f)
 	recID rt = -1;
 	ancestor *a;
 
-	if (lt = has_fmember_uname (*r, f))
+	if ((lt = has_fmember_uname (*r, f)))
 		return lt;
 
-	if (a = structs [*r].ancestors)
+	if ((a = structs [*r].ancestors))
 		for (i = 0; a [i].rec != -1; i++)
-			if (rr = has_fmember_uname (a [i].rec, f)) {
+			if ((rr = has_fmember_uname (a [i].rec, f))) {
 				if (rt == -1 || isancestor (a [i].rec, rt)) {
 					if (a [i].status == ASTATUS_FSCKD)
 						goto really_fsckd;

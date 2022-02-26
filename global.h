@@ -243,7 +243,7 @@ extern OUTSTREAM	new_stream ();
 
 extern void		free_stream	(OUTSTREAM);
 extern int		ntokens		(OUTSTREAM);
-extern inline void	output_itoken	(OUTSTREAM, int);
+extern void             output_itoken	(OUTSTREAM, int);
 extern void		outprintf	(OUTSTREAM, Token, ...);
 extern void		backspace_token	(OUTSTREAM);
 extern int		*combine_output	(OUTSTREAM);
@@ -273,7 +273,7 @@ extern Token*	expand_macro	(Token);
 
 extern Token	RESERVED_attr_stdcall;
 
-extern void	fatal		(char*);
+extern void	fatal		(const char*);
 extern int	*CODE, c_ntok;
 extern int	c_nsym, c_nval;
 
@@ -305,7 +305,7 @@ extern Token	token_addchar		(Token, int);
 
 extern void	add_extra_values	(char**, int);
 
-extern Token	Lookup_Symbol	(char*);
+extern Token	Lookup_Symbol	(const char*);
 
 extern typeID	type_of_const	(Token);
 extern bool	is_literal	(Token);
@@ -390,13 +390,13 @@ extern bool	syntax_pattern		(NormPtr, Token, ...);
 
 extern void	set_catch		(jmp_buf*, NormPtr, Token*, int);
 extern void	raise_skip_function	();
-extern void	expr_error		(char*);
-extern void	expr_errort		(char*, Token);
-extern void	expr_errortt		(char*, Token, Token);
+extern void	expr_error		(const char*);
+extern void	expr_errort		(const char*, Token);
+extern void	expr_errortt		(const char*, Token, Token);
 extern void	expr_error_undef	(Token, int);
-extern void	expr_warn		(char*);
-extern void	expr_warnt		(char*, Token);
-extern void	expr_warntt		(char*, Token, Token);
+extern void	expr_warn		(const char*);
+extern void	expr_warnt		(const char*, Token);
+extern void	expr_warntt		(const char*, Token, Token);
 extern void	clear_catch		();
 
 extern NormPtr	last_location;
@@ -405,14 +405,14 @@ extern bool	may_throw;
 
 #define SET_MAYTHROW(X) may_throw |= !(X.flagz&FUNCP_NOTHROW)
 
-extern void	parse_error		(NormPtr, char*);
-extern void	parse_error_tok		(Token, char*);
-extern void	parse_error_cpp		(char*);
-extern void	parse_error_toktok	(Token, Token, char*);
-extern void	parse_error_pt		(NormPtr, Token, char*);
-extern void	parse_error_ll		(char*);
+extern void	parse_error		(NormPtr, const char*);
+extern void	parse_error_tok		(Token, const char*);
+extern void	parse_error_cpp		(const char*);
+extern void	parse_error_toktok	(Token, Token, const char*);
+extern void	parse_error_pt		(NormPtr, Token, const char*);
+extern void	parse_error_ll		(const char*);
 
-extern void	warning_tok		(char*, Token);
+extern void	warning_tok		(const char*, Token);
 
 extern void	name_of_simple_type	(Token*, typeID);
 
@@ -590,8 +590,9 @@ static inline int base_of (typeID t)
 
 enum {
 	B_SCHAR = -32, B_UCHAR, B_SSINT, B_USINT, B_SINT, B_UINT,
-	B_SLONG, B_ULONG, B_SLLONG, B_ULLONG, B_FLOAT, B_DOUBLE, B_LDOUBLE,
-	B_VOID, B_ELLIPSIS, B_PELLIPSIS, B_PURE, INTERNAL_ARGEND /* -15 */
+	B_SLONG, B_ULONG, B_SLLONG, B_ULLONG, B_SSIZE_T, B_USIZE_T,
+        B_FLOAT, B_DOUBLE, B_LDOUBLE,
+	B_VOID, B_ELLIPSIS, B_PELLIPSIS, B_PURE, INTERNAL_ARGEND /* -13 */
 };
 
 #define REFERENCE_BASE (REFERENCE_BOOST + B_SCHAR)
@@ -845,10 +846,10 @@ extern NormPtr	parse_const_expression		(NormPtr, exprret*);
 extern void	rewrite_designator	(typeID, Token[]);
 extern Token	*rewrite_ctor_expr	(Token*);
 
-extern inline bool	ispointer	(typeID);
-extern inline bool	isstructure	(typeID);
-extern inline bool	isstructptr	(typeID);
-extern inline bool	isreference	(typeID);
+extern bool	ispointer	(typeID);
+extern bool	isstructure	(typeID);
+extern bool	isstructptr	(typeID);
+extern bool	isreference	(typeID);
 
 extern bool	is_object_in_scope	(Token);
 

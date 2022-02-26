@@ -440,7 +440,7 @@ int xlookup_function (fspace S, Token e, typeID argv[], flookup *ret)
 	match->used = true;
 	ret->oname = match->name;
 	ret->t = match->type;
-	if (ret->dflt_args = match->dflt_args) {
+	if ((ret->dflt_args = match->dflt_args)) {
 		for (o = (funcp*) S->v.p; o->name != match->name; o = o->next);
 		o->used = true;
 	}

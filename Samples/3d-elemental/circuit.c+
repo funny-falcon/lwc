@@ -1,0 +1,682 @@
+extern "math.h" {
+#include <math.h>
+}
+extern "time.h" {
+#include <time.h>
+}
+extern "unistd.h" {
+#include <unistd.h>
+}
+extern "stdlib.h" {
+#include <stdlib.h>
+}
+
+#include "global.h"
+
+struct p3d {
+	int x, y, z;
+};
+struct p2d {
+	int x, y;
+};
+struct line3d {
+	p3d p1, p2;
+};
+
+#define CAMERADIM	500
+#define NCIRCUIT	630
+#define DECS		5
+#define NREAL		(NCIRCUIT * DECS)
+
+static p3d Circuit [2] [NCIRCUIT];
+static struct {
+	float x, y, z;
+	float cs, sn;
+	float pcs, psn;
+	float rcs, rsn;
+} FCircuit [NREAL];
+
+struct {
+	int rad, rdev_percent, min_height, dheight, rack_width;
+} cparam = { 11700, 21, 1130, 3200, 2*CAMERADIM/7 };
+
+static inline float sqr (float x)
+{
+	return x*x;
+}
+
+static inline int sqri (int x)
+{
+	return x*x;
+}
+
+static inline float distance (float x, float y)
+{
+	return sqrtf (sqr (x) + sqr (y));
+}
+
+//
+// Circuit completion
+//
+static void complete_circuit ()
+{
+	int i, SP = cparam.rack_width;
+	float px, pz, dx, dz, dy; 
+	float rxz2, rxz, rxyz;
+
+	for (i = 0; i < NCIRCUIT; i++) {
+		px = FCircuit [i*DECS + 1].x - FCircuit [i*DECS].x;
+		pz = FCircuit [i*DECS + 1].z - FCircuit [i*DECS].z;
+		dx =  (SP * pz) / sqrt (sqr (px) + sqr (pz));
+		dz =  -(SP * px) / sqrt (sqr (px) + sqr (pz));
+		Circuit [0][i].x = (int) (FCircuit [i*DECS].x + dx);
+		Circuit [0][i].z = (int) (FCircuit [i*DECS].z + dz);
+		Circuit [1][i].x = (int) (FCircuit [i*DECS].x - dx);
+		Circuit [1][i].z = (int) (FCircuit [i*DECS].z - dz);
+		Circuit [1][i].y = Circuit [0][i].y = (int) FCircuit [i*DECS].y;
+	}
+	// slopes
+	for (i = 0; i < NREAL; i++) {
+		dx = FCircuit [(i+1)%NREAL].x - FCircuit [i].x;
+		dy = FCircuit [(i+1)%NREAL].y - FCircuit [i].y;
+		dz = FCircuit [(i+1)%NREAL].z - FCircuit [i].z;
+		rxz2 = sqr (dx) + sqr (dz);
+		rxz = sqrt (rxz2);
+		rxyz = sqrt (rxz2 + sqr (dy));
+
+		FCircuit [i].cs = dz / rxz;
+		FCircuit [i].sn = dx / rxz;
+		FCircuit [i].psn = 0.64*dy / rxyz;
+		FCircuit [i].pcs = sqrt (1 - sqr (FCircuit [i].psn));
+	}
+}
+
+static void toggle_direction ()
+{
+	// mostly look at the future
+static	int prob = 92;
+	int i;
+	if (randup (100) < prob) return;
+	prob = 100 - prob;
+	for (i = 0; i < NREAL; i++) {
+		FCircuit [i].cs =- FCircuit [i].cs;
+		FCircuit [i].sn =- FCircuit [i].sn;
+		FCircuit [i].psn =- FCircuit [i].psn;
+	}
+}
+
+static void mk_circuit_0 ()
+{
+	float df = 2.0*M_PI/NREAL;
+	int i;
+
+	for (i = 0; i < NREAL; i++) {
+		FCircuit [i].x = cparam.rad * cos (df*i);
+		FCircuit [i].z = cparam.rad * sin (df*i);
+		FCircuit [i].y = cparam.min_height +
+			cparam.dheight * 3.8*(1 + sin (5*df*i));
+	}
+
+	complete_circuit ();
+}
+
+static void mk_circuit_1 ()
+{
+	int rdeviation = cparam.rad * cparam.rdev_percent / 100;
+	int i;
+	float v [NREAL];
+	float f = 0.0, df = 2.0*M_PI /(float) NREAL, r;
+
+	t2_function (v, NCIRCUIT, 32, 0.7, DECS);
+	for (i = 0; i < NREAL; i++) {
+		FCircuit [i].x = (r = cparam.rad + rdeviation * v [i])
+					 * sin (f = i*df);
+		FCircuit [i].z = r * cos (f);
+	}
+
+	t2_function (v, NCIRCUIT, 24, 0.9, DECS);
+	for (i = 0; i < NREAL; i++)
+		FCircuit [i].y = cparam.min_height + cparam.dheight *
+			(v [i] + 1.0) * 0.5;
+
+	complete_circuit ();
+}
+
+static void mk_circuit_2 ()
+{
+	int rdeviation = cparam.rad * cparam.rdev_percent / 100;
+	int i;
+	float v [NREAL];
+	float f = 0.0, df = 2.0*M_PI /(float) NREAL;
+
+	t2_function (v, NCIRCUIT, 32, 0.7, DECS);
+	for (i = 0; i < NREAL; i++) {
+		float r = cparam.rad + rdeviation * v [i];
+		f = i*df;
+		FCircuit [i].x = r * sin (2*f);
+		FCircuit [i].z = r * cos (f);
+	}
+
+	t2_function (v, NCIRCUIT, 24, 0.9, DECS);
+	for (i = 0; i < NREAL; i++)
+		FCircuit [i].y = cparam.min_height + cparam.dheight *
+			(v [i] + 1.0) * 0.5;
+
+	complete_circuit ();
+}
+
+static void mk_circuit_3 ()
+{
+	int rdeviation = cparam.rad * cparam.rdev_percent / 100;
+	int i;
+	float v [NREAL];
+	float f = 0.0, df = 2.0*M_PI /(float) NREAL;
+
+	t2_function (v, NCIRCUIT, 32, 0.7, DECS);
+	for (i = 0; i < NREAL; i++) {
+		float r = cparam.rad + rdeviation * v [i];
+		f = i*df;
+		FCircuit [i].x = r * sin (3*f);
+		FCircuit [i].z = r * cos (f);
+	}
+
+	t2_function (v, NCIRCUIT, 24, 0.9, DECS);
+	for (i = 0; i < NREAL; i++)
+		FCircuit [i].y = cparam.min_height + cparam.dheight *
+			(v [i] + 1.0) * 0.5;
+
+	complete_circuit ();
+}
+
+static void mk_circuit ()
+{
+	int i = randup (100);
+	if (i < 10) mk_circuit_0 ();
+	else if (i < 45) mk_circuit_1 ();
+	else if (i < 85) mk_circuit_2 ();
+	else mk_circuit_3 ();
+}
+
+//
+// Make a plexirgam
+//
+
+#define PLEXLINES 80
+#define PLEXSIZE (5*cparam.rad)
+
+static line3d Plexigram [PLEXLINES];
+static void mk_plex ()
+{
+	int i, j;
+
+	for (i = 0; i < PLEXLINES / 2; i++) {
+		Plexigram [i].p1.y = Plexigram [i].p2.y = 0;
+		Plexigram [i].p1.z = Plexigram [i].p2.z =
+			i*PLEXSIZE/PLEXLINES - PLEXSIZE/4;
+		Plexigram [i].p2.x = -(Plexigram [i].p1.x = PLEXSIZE/3);
+	}
+	for (i = 0; i < PLEXLINES / 2; i++) {
+		j = i + PLEXLINES / 2;
+		Plexigram [j].p1.y = Plexigram [j].p2.y = 0;
+		Plexigram [j].p1.x = Plexigram [j].p2.x =
+			i*PLEXSIZE/PLEXLINES - PLEXSIZE/4;
+		Plexigram [j].p2.z = -(Plexigram [j].p1.z = PLEXSIZE/3);
+	}
+}
+
+//
+// World movement
+//
+static inline void mov_world (int xo, int yo, int zo, p3d P)
+{
+	P.x -= xo;
+	P.y -= yo;
+	P.z -= zo;
+}
+
+static inline void rot_world_yaw (float cs, float sn, p3d P)
+{
+	float xi = P.x, zi = P.z, z, x;
+	z = zi * cs + xi * sn;
+	x = xi * cs - zi * sn;
+	P.x = (int) x;
+	P.z = (int) z;
+}
+
+static inline void rot_world_pitch (float cs, float sn, p3d P)
+{
+	float yi = P.y, zi = P.z, z, y;
+	z = zi * cs + yi * sn;
+	y = yi * cs - zi * sn;
+	P.z = (int) z;
+	P.y = (int) y;
+}
+
+static inline void rot_world_yawpitch
+	(float cs, float sn, float pcs, float psn, p3d P)
+{
+	float xi = P.x, yi = P.y, zi = P.z, zii, x, y, z;
+	zii = zi * cs + xi * sn;
+	x = xi * cs - zi * sn;
+	z = zii * pcs + yi * psn;
+	y = yi * pcs - zii * psn;
+	P.x = (int) x;
+	P.z = (int) z;
+	P.y = (int) y;
+}
+
+//
+// Project transformations
+//
+#define FOCUS_ANGLE 25
+static int focus;
+
+static inline p2d project2D (p3d P)
+{
+	int dv = P.z + focus;
+	p2d r;
+	r.x = (focus * P.x) / dv;
+	r.y = (focus * P.y) / dv;
+	return r;
+}
+
+//
+// Clip 3D Line
+//
+static inline int clip3Dline (p3d *p1, p3d *p2)
+{
+	int code = (p1->z <= 0) | ((p2->z <= 0)<<1);
+	int nx, ny, dz, zz;
+
+	if (code == 0) return 1;
+	if (code == 3) return 0;
+	dz = p2->z - p1->z;
+	zz = 1 - p1->z;
+	nx = ((p2->x - p1->x) * zz) / dz + p1->x;
+	ny = ((p2->y - p1->y) * zz) / dz + p1->y;
+	if (code == 1) {
+		p1->x = nx;
+		p1->y = ny;
+		p1->z = 1;
+	} else {
+		p2->x = nx;
+		p2->y = ny;
+		p2->z = 1;
+	}
+
+	return 1;
+}
+
+//
+// The green grid
+//
+#define CAM_X(x) (CAMERADIM*x/SCRX+SCRX/2)
+#define CAM_Y(y) (SCRY/2-CAMERADIM*y/SCRY)
+
+static void plexcolor ()
+{
+static	int t;
+	float cv = 50.0 + 9.0/(1.1+sin(0.01*M_PI*t++));
+	v_setcolor (rgbcolor (0, (int)cv, 0));
+}
+
+static void draw_plex
+	(int xo, int yo, int zo, float cs, float sn, float pcs, float psn)
+{
+	int i;
+	p3d t1, t2;
+	p2d s1, s2;
+
+	plexcolor ();
+	for (i = 0; i < PLEXLINES; i++) {
+		t1 = Plexigram [i].p1;
+		t2 = Plexigram [i].p2;
+		mov_world (xo, yo, zo, &t1);
+		mov_world (xo, yo, zo, &t2);
+		rot_world_yawpitch (cs, sn, pcs, psn, &t1);
+		rot_world_yawpitch (cs, sn, pcs, psn, &t2);
+		if (clip3Dline (&t1, &t2)) {
+			s1 = project2D (&t1);
+			s2 = project2D (&t2);
+			v_line (CAM_X(s1.x), CAM_Y(s1.y),
+				CAM_X(s2.x), CAM_Y(s2.y));
+		}
+	}
+}
+
+//
+//
+//
+
+void tt ()
+{
+	int i, j, k;
+	p3d tt, tb;
+	p2d pt, pb;
+	float f = 0, df = 0.013;
+	float cs, sn, xi, zi, x, z;
+
+	for (i = 0; i < 400; i++) {
+		cs = cos (f += df);
+		sn = sin (f);
+		plexcolor ();
+		for (j = 0; j < PLEXLINES; j++) {
+			tt = Plexigram [j].p1;
+			tb = Plexigram [j].p2;
+			rot_world_yaw (cs, sn, &tt);
+			mov_world (0,  500, -22000, &tt);
+			rot_world_yaw (cs, sn, &tb);
+			mov_world (0,  500, -22000, &tb);
+			if (clip3Dline (&tt, &tb)) {
+				pt = project2D (&tt);
+				pb = project2D (&tb);
+				v_line (CAM_X(pt.x), CAM_Y(pt.y),
+					CAM_X(pb.x), CAM_Y(pb.y));
+			}
+		}
+		v_setcolor (65535);
+		for (j = 0; j < NCIRCUIT; j++)
+		for (k = 0; k < 2; k++) {
+			xi = Circuit [k][j].x;
+			zi = Circuit [k][j].z;
+			x = xi*cs - zi*sn;
+			z = zi*cs + xi*sn;
+			z += 22000;
+			if ((tt.z = tb.z = (int) z) <= 0) continue;
+			tt.x = tb.x = (int) x;
+			tt.y = Circuit [k][j].y - 500;
+			tb.y = -500;
+			pt = project2D (&tt);
+			pb = project2D (&tb);
+			v_vline (CAM_X(pt.x), CAM_Y(pt.y), CAM_Y(pb.y));
+		}
+		v_blitt ();
+	}
+}
+
+void tt2 ()
+{
+	int i, j, k;
+	int xo, yo, zo;
+	p3d tt, tb;
+	p2d pt, pb;
+
+	for (i = 0; i < NREAL; i++) {
+		xo = (int)FCircuit [i%NREAL].x;
+		yo = (int)FCircuit [i%NREAL].y + 140;
+		zo = (int)FCircuit [i%NREAL].z;
+		draw_plex (xo, yo, zo, 1, 0, 1, 0);
+		v_setcolor (65535);
+		for (k = 0; k < 2; k++)
+		for (j = 0; j < NCIRCUIT; j++) {
+			tt = Circuit [k][j];
+			mov_world (xo, yo, zo, &tt);
+			if (tt.z > 0) {
+				tb = tt;
+				tb.y = -yo;
+				pt = project2D (&tt);
+				pb = project2D (&tb);
+				v_vline (CAM_X(pt.x), CAM_Y(pt.y), CAM_Y(pb.y));
+			}
+		}
+		v_blitt ();
+	}
+}
+
+void tt3 ()
+{
+	int i, j, ii, k;
+	int xo, yo, zo;
+	float cs, sn;
+	p3d tt, tb;
+	p2d pt, pb;
+
+	toggle_direction ();
+	for (i = 0; i < NREAL; i++) {
+		xo = (int)FCircuit [ii = i%NREAL].x;
+		yo = (int)FCircuit [ii].y + 20;
+		zo = (int)FCircuit [ii].z;
+		cs = FCircuit [ii].cs;
+		sn = FCircuit [ii].sn;
+		tb.y =- yo;
+		draw_plex (xo, yo, zo, cs, sn, 1, 0);
+		v_setcolor (65535);
+		for (k = 0; k < 2; k++) 
+		for (j = 0; j < NCIRCUIT; j++) {
+			tt = Circuit [k][j];
+			mov_world (xo, yo, zo, &tt);
+			rot_world_yaw (cs, sn, &tt);
+			tb.x = tt.x; tb.z = tt.z;
+			if (tb.z > 0) {
+				pt = project2D (&tt);
+				pb = project2D (&tb);
+				v_vline (CAM_X(pt.x), CAM_Y(pt.y), CAM_Y(pb.y));
+			}
+		}
+		v_blitt ();
+	}
+}
+
+void tt4 ()
+{
+	int i, j, ii, c, k;
+	int xo, yo, zo;
+	float cs, sn, pcs, psn;
+	p3d tt, tb;
+	p2d pt, pb;
+
+	toggle_direction ();
+	for (i = 0; i < NREAL; i++) {
+		xo = (int)FCircuit [ii = i%NREAL].x;
+		yo = (int)FCircuit [ii].y + 50;
+		zo = (int)FCircuit [ii].z;
+		cs = FCircuit [ii].cs;
+		sn = FCircuit [ii].sn;
+		pcs = FCircuit [ii].pcs;
+		psn = FCircuit [ii].psn;
+		draw_plex (xo, yo, zo, cs, sn, pcs, psn);
+		v_setcolor (65532);
+		for (k = 0; k < 2; k++) {
+			c = 255 - k*75;
+			v_setcolor (rgbcolor (c, c, c));
+		for (j = 0; j < NCIRCUIT; j++) {
+			tb = tt = Circuit [k][j];
+			tb.y = 0;
+			mov_world (xo, yo, zo, &tt);
+			mov_world (xo, yo, zo, &tb);
+			rot_world_yawpitch (cs, sn, pcs, psn, &tt);
+			rot_world_yawpitch (cs, sn, pcs, psn, &tb);
+			if (clip3Dline (&tb, &tt)) {
+				pt = project2D (&tt);
+				pb = project2D (&tb);
+				v_line (CAM_X(pt.x), CAM_Y(pt.y),
+					CAM_X(pb.x), CAM_Y(pb.y));
+			}
+		}
+		}
+		v_blitt ();
+	}
+}
+
+//
+// Back to Front test
+//
+static struct {
+	p3d tt, tb;
+	int less, more;
+	int lor;
+} btf [NCIRCUIT*2];
+static int btfi;
+
+#define NBTF (sizeof btf/sizeof btf [0])
+
+static inline void insert_btf (p3d *tt, p3d *tb, int lor)
+{
+	int i = 0;
+
+	btf [btfi].tt = *tt;
+	btf [btfi].tb = *tb;
+	btf [btfi].less = btf [btfi].more = 0;
+	btf [btfi].lor = lor;
+	if (btfi == 0) {
+		btfi++;
+		return;
+	}
+
+	while (1)
+	if (btf [i].tt.z < tt->z)
+		if (btf [i].less) i = btf [i].less;
+		else {
+			btf [i].less = btfi++;
+			break;
+		}
+	else
+		if (btf [i].more) i = btf [i].more;
+		else {
+			btf [i].more = btfi++;
+			break;
+		}
+
+}
+
+static inline void draw_btf (int n)
+{
+	p2d pt, pb;
+	int c = 215 - (btf [n].tt.z * 150 / cparam.rad);
+	int c2 = 255 - (btf [n].tt.z * 90 / cparam.rad);
+	int CX, CY;
+
+	if (c < 6) c = 6;
+
+	c2 = (btf [n].lor) ? rgbcolor (c2, c2/3, 0) : rgbcolor (0, c2/3, c2);
+
+
+	v_setcolor (rgbcolor (c, c, c));
+	pt = project2D (&btf [n].tt);
+	pb = project2D (&btf [n].tb);
+	CX = CAM_X (pt.x);
+	CY = CAM_Y (pt.y);
+	v_line (CX, CY, CAM_X(pb.x), CAM_Y(pb.y));
+	v_setcolor (c2);
+	v_putpixel (CX, CY);
+}
+
+static void btf_draw (int n)
+{
+	if (btf [n].less) btf_draw (btf [n].less);
+	draw_btf (n);
+	if (btf [n].more) btf_draw (btf [n].more);
+}
+
+static void back_to_front ()
+{
+	if (btfi) btf_draw (0);
+	btfi = 0;
+	v_blitt ();
+}
+
+void bbtt3 ()
+{
+	int i, j, ii, k;
+	int xo, yo, zo;
+	float cs, sn;
+	p3d tt, tb;
+
+	toggle_direction ();
+	for (i = 0; i < 2*NREAL; i++) {
+		xo = (int)FCircuit [ii = i%NREAL].x;
+		yo = (int)FCircuit [ii].y + 20;
+		zo = (int)FCircuit [ii].z;
+		cs = FCircuit [ii].cs;
+		sn = FCircuit [ii].sn;
+		tb.y =- yo;
+		draw_plex (xo, yo, zo, cs, sn, 1, 0);
+		for (k = 0; k < 2; k++) 
+		for (j = 0; j < NCIRCUIT; j++) {
+			tt = Circuit [k][j];
+			mov_world (xo, yo, zo, &tt);
+			rot_world_yaw (cs, sn, &tt);
+			tb.x = tt.x; tb.z = tt.z;
+			if (tb.z > 0)
+				insert_btf (&tt, &tb, k^(j&1));
+		}
+		back_to_front ();
+	}
+}
+
+void bbtt4 ()
+{
+	int i, j, ii, k;
+	int xo, yo, zo;
+	float cs, sn, pcs, psn;
+	p3d tt, tb;
+
+	toggle_direction ();
+	for (i = 0; i < 6*NREAL; i++) {
+		xo = (int)FCircuit [ii = i%NREAL].x;
+		yo = (int)FCircuit [ii].y + 50;
+		zo = (int)FCircuit [ii].z;
+		cs = FCircuit [ii].cs;
+		sn = FCircuit [ii].sn;
+		pcs = FCircuit [ii].pcs;
+		psn = FCircuit [ii].psn;
+		draw_plex (xo, yo, zo, cs, sn, pcs, psn);
+		for (k = 0; k < 2; k++)
+		for (j = 0; j < NCIRCUIT; j++) {
+			tb = tt = Circuit [k][j];
+			tb.y = 0;
+			mov_world (xo, yo, zo, &tt);
+			mov_world (xo, yo, zo, &tb);
+			rot_world_yawpitch (cs, sn, pcs, psn, &tt);
+			rot_world_yawpitch (cs, sn, pcs, psn, &tb);
+			if (clip3Dline (&tb, &tt))
+				insert_btf (&tt, &tb, k);
+		}
+		back_to_front ();
+	}
+}
+//
+//
+//
+
+void upview_circuit ()
+{
+	int xo, yo, i, x, y, k;
+
+	for (k = 0; k < 2; k++) {
+		xo = Circuit [k][0].x/70 + 320;
+		yo = Circuit [k][0].z/70 + 240;
+		for (i = 0; i < NCIRCUIT; i++) {
+			x = Circuit [k][i].x/70 + 320;
+			y = Circuit [k][i].z/70 + 240;
+			v_line (xo, yo, x, y);
+			xo = x, yo = y;
+		}
+	}
+	v_blitt ();
+	sleep (3);
+}
+
+
+int main ()
+{
+	srand (time (0) + getpid ());
+	focus = (int) (0.5 * SCRX / tan (FOCUS_ANGLE*M_PI/180.0));
+	initialize_graphics ();
+	mk_plex ();
+	for (;;) {
+		mk_circuit ();
+		v_setcolor (65531);
+		upview_circuit ();
+		if (1) {
+			tt ();
+			tt2 ();
+			tt3 ();
+			tt4 ();
+		}
+		bbtt3 ();
+		bbtt4 ();
+	}
+	return 0;
+}
+

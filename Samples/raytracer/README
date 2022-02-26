@@ -1,0 +1,30 @@
+
+This is a real-time raytracer. I wanted to write a game, but it seems
+that something is broken somewhere. Anyway, it is fun so far.
+
+The compilation assumes you have athlon-xp with sse.
+If you have another processor EDIT THE MAKEFILE!
+If you know you have sse, leave the -mfpmath=sse flag!
+
+NOTE that the program runs on 16-bit-per-pixel color displays
+If you have anything else, I don't know what will happen!
+You'll probably see junk.
+
+Once you're done, get into X windows and run a.out
+
+In the first screen you are able to move the character in a room
+with a light bulb. With 'p' and 'l' you move forward and backward.
+With 'k' ans 'm' up and down. With ',' and '.' you rotate.
+With 'q' you exit into the demos.
+
+The demos go on to count frames per second.
+
+The very interesting thing demonstrated here (except raytracing,
+which BTW if you like the idea contact me), is how to write a
+portable lwc program. The game uses Xlib functions. These
+are wrapped in grfix.c, the lwc file main.c+ does not include
+any system headers.
+
+Also, the program tries to achieve speed by extreme inlining
+and compile-time polymorphism and template interfaces.
+(must use abstract classes in the next version)

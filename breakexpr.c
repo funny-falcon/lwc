@@ -159,7 +159,7 @@ static NormPtr unary_expression (bexpr *e, NormPtr p)
 		return e->operators [1] = skip_buffer_parenthesis (e->expr, p + 1);
 	}
 
-	if (e->expr [p] == RESERVED_sizeof)
+	if (e->expr [p] == RESERVED_sizeof) {
 		if (e->expr [p + 1] == '(' && is_dcl_start (e->expr [p + 2])) {
 			/* * Feature: classname.symbol is an expression * */
 			if (ISSYMBOL (e->expr [p + 2]) && e->expr [p + 3] == '.')
@@ -179,7 +179,7 @@ static NormPtr unary_expression (bexpr *e, NormPtr p)
 			e->esc_op = false;
 			return p;
 		}
-
+        }
 	if (e->expr [p] == '(')
 		if (is_dcl_start (e->expr [p + 1])
 		&& !(e->expr [p + 2] == '(' && e->expr [p + 3] != '*')

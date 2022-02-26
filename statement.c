@@ -75,7 +75,7 @@ static NormPtr switch_statement (OUTSTREAM o, NormPtr p)
 {
 	bool dcl;
 	/* Feature: switch (declaration) */
-	if (dcl = CODE [p] == '(' && is_dcl_start (CODE [p + 1]) && CODE [p + 2] != '.') {
+	if ((dcl = CODE [p] == '(' && is_dcl_start (CODE [p + 1]) && CODE [p + 2] != '.')) {
 		NormPtr p2;
 		p = skip_parenthesis (p2 = p + 1) - 1;
 		CODE [p] = ';';
@@ -160,7 +160,7 @@ static NormPtr for_statement (OUTSTREAM o, NormPtr p)
 	if (CODE [p++] != '(')
 		parse_error (p, "for '('");
 	/* Feature: first part may be declaration */
-	if (first_dcl = is_dcl_start (CODE [p])) {
+	if ((first_dcl = is_dcl_start (CODE [p]))) {
 		output_itoken (o, '{');
 		open_local_scope ();
 		p = local_declaration (o, p) - 1;
@@ -337,7 +337,7 @@ static NormPtr jump_statement (OUTSTREAM o, NormPtr p, Token t)
 		Token lbl;
 
 		if (bhd) output_itoken (o, '{');
-		if (lbl = gen_break_destructors (o, cont, break_n))
+		if ((lbl = gen_break_destructors (o, cont, break_n)))
 			outprintf (o, RESERVED_goto, lbl, ';', -1);
 		else outprintf (o, t, ';', -1);
 		if (bhd) output_itoken (o, '}');

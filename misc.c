@@ -92,6 +92,7 @@ static void throw_it (bool noerror)
 	if (in_function) fprintf (stderr, "%sin function %s();\n", MSG, expand (in_function));
 	if (noerror) return;
 #ifdef	DEBUG
+        fflush(errstream);
 	if (debugflag.PARSE_ERRORS_SEGFAULT)
 		*((int*)0)=0;
 	if (debugflag.EXPR_ERRORS_FATAL) exit (1);
@@ -100,37 +101,37 @@ static void throw_it (bool noerror)
 	dothrow (0);
 }
 
-void expr_error (char *description)
+void expr_error (const char *description)
 {
 	fprintf (errstream, EER"%s\n", description);
 	throw_it (0);
 }
 
-void expr_errort (char *description, Token t)
+void expr_errort (const char *description, Token t)
 {
 	fprintf (errstream, EER"%s `%s'\n", description, expand (t));
 	throw_it (0);
 }
 
-void expr_errortt (char *description, Token t1, Token t2)
+void expr_errortt (const char *description, Token t1, Token t2)
 {
 	fprintf (errstream, EER"%s `%s' `%s'\n", description, expand (t1), expand (t2));
 	throw_it (0);
 }
 
-void expr_warn (char *description)
+void expr_warn (const char *description)
 {
 	fprintf (errstream, WARN"%s\n", description);
 	throw_it (1);
 }
 
-void expr_warnt (char *description, Token t)
+void expr_warnt (const char *description, Token t)
 {
 	fprintf (errstream, WARN"%s `%s'\n", description, expand (t));
 	throw_it (1);
 }
 
-void expr_warntt (char *description, Token t1, Token t2)
+void expr_warntt (const char *description, Token t1, Token t2)
 {
 	fprintf (errstream, WARN"%s `%s' `%s'\n", description, expand (t1), expand (t2));
 	throw_it (1);
@@ -147,7 +148,7 @@ void expr_error_undef (Token t, int w)
 	throw_it (0);
 }
 
-void parse_error (NormPtr i, char *p)
+void parse_error (NormPtr i, const char *p)
 {
 	fprintf (errstream, "%s:%i [Token %i]: %s\n", c_file_of(i), c_line_of(i), i, p);
 	NormPtr n = i - 10;
@@ -166,39 +167,39 @@ void parse_error (NormPtr i, char *p)
 NormPtr last_location;
 Token in_function;
 
-void parse_error_tok (Token t, char *p)
+void parse_error_tok (Token t, const char *p)
 {
 	char *tmp = (char*) alloca (strlen (p) + strlen (expand (t)) + 8);
 	sprintf (tmp, "%s : `%s'", p, expand (t));
 	parse_error (last_location, tmp);
 }
 
-void parse_error_cpp (char *p)
+void parse_error_cpp (const char *p)
 {
 	fprintf (errstream, "Cpp error near line %i: %s\n", line, p);
 	exit (1);
 }
 
-void parse_error_toktok (Token t1, Token t2, char *p)
+void parse_error_toktok (Token t1, Token t2, const char *p)
 {
 	char *tmp = (char*) alloca (strlen (p) + strlen (expand (t1)) + strlen (expand (t2)) + 9);
 	sprintf (tmp, "%s : `%s' `%s'", p, expand (t1), expand (t2));
 	parse_error (last_location, tmp);
 }
 
-void parse_error_pt (NormPtr i, Token t, char *p)
+void parse_error_pt (NormPtr i, Token t, const char *p)
 {
 	char *tmp = (char*) alloca (strlen (p) + strlen (expand (t)) + 8);
 	sprintf (tmp, "%s : `%s'", p, expand (t));
 	parse_error (i, tmp);
 }
 
-void parse_error_ll (char *p)
+void parse_error_ll (const char *p)
 {
 	parse_error (last_location, p);
 }
 
-void warning_tok (char *p, Token t)
+void warning_tok (const char *p, Token t)
 {
 	fprintf (errstream, "Warning %s:%i %s '%s'\n", c_file_of (last_location),
 						       c_line_of (last_location), p, expand (t));
@@ -238,6 +239,8 @@ void name_of_simple_type (Token *s, typeID t)
 	Case (B_USINT, RESERVED_unsigned, RESERVED_short, RESERVED_int);
 	Case (B_SINT, RESERVED_int);
 	Case (B_UINT, RESERVED_unsigned, RESERVED_int);
+	Case (B_SSIZE_T, RESERVED_ssz_t);
+	Case (B_USIZE_T, RESERVED_usz_t);
 	Case (B_SLONG, RESERVED_long);
 	Case (B_ULONG, RESERVED_unsigned, RESERVED_long);
 	Case (B_SLLONG, RESERVED_long, RESERVED_long);
@@ -408,6 +411,8 @@ Token *build_type (typeID t, Token o, Token ret[])
 	ncase B_SSINT:  sintprintf (ret, RESERVED_short, RESERVED_int, -1);
 	ncase B_UINT:   sintprintf (ret, RESERVED_unsigned, RESERVED_int, -1);
 	ncase B_SINT:   sintprintf (ret, RESERVED_int, -1);
+	ncase B_SSIZE_T:   sintprintf (ret, RESERVED_ssz_t, -1);
+	ncase B_USIZE_T:   sintprintf (ret, RESERVED_usz_t, -1);
 	ncase B_ULONG:  sintprintf (ret, RESERVED_unsigned, RESERVED_long, -1);
 	ncase B_SLONG:  sintprintf (ret, RESERVED_long, -1);
 	ncase B_ULLONG: sintprintf (ret, RESERVED_unsigned, RESERVED_long, RESERVED_long, -1);

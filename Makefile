@@ -7,6 +7,7 @@
 CCC = ncc -ncld -ncfabs -ncgcc -Wall -g -Wno-parentheses
 CCC = ncc -ncld -ncfabs -ncgcc -Wall -O2 -Wno-parentheses
 CCC = gcc -Wall -std=gnu89 -g -Wno-parentheses
+CCC = gcc -Wall -g
 
 CC = $(CCC) -c
 

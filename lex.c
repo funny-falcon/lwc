@@ -125,7 +125,7 @@ printf ("Willdo [%s]\n", txt);
 
 typedef struct snode_t {
 	struct snode_t *less, *more;
-	char *txt;
+	const char *txt;
 	int id;
 } snode;
 
@@ -134,7 +134,7 @@ static snode *symbol_tree, *value_tree;
 static int symbol_inc, value_inc;
 int c_nval;
 
-static snode *newnode (char *txt, int id)
+static snode *newnode (const char *txt, int id)
 {
 	snode *nn = (snode*) malloc (sizeof (snode));
 	nn->less = nn->more = NULL;
@@ -363,7 +363,7 @@ static const signed char ll_ctypes [256] = {
 
 //
 
-inline void skip_comment ()
+void skip_comment ()
 {
 	Ci += 2;
 
@@ -379,7 +379,7 @@ inline void skip_comment ()
 	++Ci;
 }
 
-inline void skip_line ()
+void skip_line ()
 {
 	for (;;) {
 		while (Cpp [Ci] != '\n')
@@ -393,7 +393,7 @@ inline void skip_line ()
 	}
 }
 
-inline int skip_ws ()
+int skip_ws ()
 {
 	int cl = 0;
 
@@ -826,6 +826,10 @@ void initlex ()
 	ENTER_SYMBOL (double);
 	ENTER_SYMBOL (modular);
 	ENTER_SYMBOL (class);
+
+	ENTER_SYMBOL (ssz_t);
+	ENTER_SYMBOL (usz_t);
+
 	// extensive
 	ENTER_SYMBOL (__asm__);
 	ENTER_SYMBOL (__extension__);
@@ -1014,7 +1018,7 @@ static void calc_binshift ()
 /******************************************************************************
 	yydo interface
 ******************************************************************************/
-void fatal (char *m)
+void fatal (const char *m)
 {
 	fprintf (stderr, "lex-error: %s\n", m);
 	exit (1);
@@ -1117,7 +1121,7 @@ static char **dynsym;
 static int ndynsym, dynsymalloc;
 static snode *ns_tree;
 
-static snode *lookup_dynsym (char *s)
+static snode *lookup_dynsym (const char *s)
 {
 	snode *n = ns_tree;
 	snode *r = (snode*) malloc (sizeof *r);
@@ -1233,7 +1237,7 @@ long long int eval_intll (Token c)
 	reserved. Like "__FUNCTION__" "main", etc.
 	The search in N, but this is ok (for now at least)
 ******************************************************************************/
-Token Lookup_Symbol (char *s)
+Token Lookup_Symbol (const char *s)
 {
 	int i;
 	for (i = 0; i < c_nsym; i++)
@@ -1274,7 +1278,7 @@ char *expand (int token)
 		if (token >= ARGBASE) return "*argument*";
 		return dynsym [token - DYNBASE];
 	}
-	if (escop = token >= ESCBASE) token -= ESCBASE;
+	if ((escop = token >= ESCBASE)) token -= ESCBASE;
 	if (token > 256) switch (token) {
 		ocase (ELLIPSIS, "...");
 		pcase (POINTSAT, "->");

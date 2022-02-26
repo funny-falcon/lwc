@@ -1,0 +1,167 @@
+Script started on Sun Nov  9 15:10:49 2003
+stan@linux:~/lwc-1.0/Samples/ncc> m
+valgrind lwc  dbstree.c+ > dbstree.c
+==2145== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2145== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2145== Estimated CPU clock rate is 533 MHz
+==2145== For more details, rerun with: -v
+==2145== 
+Running: cpp -D__LWC__ -x c -C dbstree.c+ 
+==2145== 
+==2145== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2145== malloc/free: in use at exit: 497055 bytes in 5597 blocks.
+==2145== malloc/free: 14195 allocs, 8598 frees, 1839695 bytes allocated.
+==2145== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2145== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g dbstree.c  -c 
+valgrind lwc  inttree.c+ > inttree.c
+==2156== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2156== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2156== Estimated CPU clock rate is 534 MHz
+==2156== For more details, rerun with: -v
+==2156== 
+Running: cpp -D__LWC__ -x c -C inttree.c+ 
+==2156== 
+==2156== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2156== malloc/free: in use at exit: 107568 bytes in 2151 blocks.
+==2156== malloc/free: 2858 allocs, 707 frees, 341201 bytes allocated.
+==2156== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2156== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g inttree.c  -c 
+valgrind lwc  lex.c+ > lex.c
+==2167== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2167== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2167== Estimated CPU clock rate is 533 MHz
+==2167== For more details, rerun with: -v
+==2167== 
+Running: cpp -D__LWC__ -x c -C lex.c+ 
+==2167== 
+==2167== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2167== malloc/free: in use at exit: 375091 bytes in 8284 blocks.
+==2167== malloc/free: 12556 allocs, 4272 frees, 1270592 bytes allocated.
+==2167== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2167== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g lex.c  -c 
+valgrind lwc  mem_pool.c+ > mem_pool.c
+==2178== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2178== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2178== Estimated CPU clock rate is 534 MHz
+==2178== For more details, rerun with: -v
+==2178== 
+Running: cpp -D__LWC__ -x c -C mem_pool.c+ 
+==2178== 
+==2178== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2178== malloc/free: in use at exit: 199809 bytes in 4983 blocks.
+==2178== malloc/free: 5450 allocs, 467 frees, 635472 bytes allocated.
+==2178== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2178== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g mem_pool.c  -c 
+valgrind lwc  space.c+ > space.c
+==2189== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2189== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2189== Estimated CPU clock rate is 534 MHz
+==2189== For more details, rerun with: -v
+==2189== 
+Running: cpp -D__LWC__ -x c -C space.c+ 
+==2189== 
+==2189== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2189== malloc/free: in use at exit: 595632 bytes in 7778 blocks.
+==2189== malloc/free: 19133 allocs, 11355 frees, 2973841 bytes allocated.
+==2189== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2189== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g space.c  -c 
+valgrind lwc  cexpand.c+ > cexpand.c
+==2200== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2200== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2200== Estimated CPU clock rate is 534 MHz
+==2200== For more details, rerun with: -v
+==2200== 
+Running: cpp -D__LWC__ -x c -C cexpand.c+ 
+==2200== 
+==2200== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2200== malloc/free: in use at exit: 291821 bytes in 6548 blocks.
+==2200== malloc/free: 9355 allocs, 2807 frees, 1332155 bytes allocated.
+==2200== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2200== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g cexpand.c  -c 
+cexpand.c: In function `expand':
+cexpand.c:904: warning: long int format, int arg (arg 3)
+valgrind lwc  preproc.c+ > preproc.c
+==2211== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2211== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2211== Estimated CPU clock rate is 535 MHz
+==2211== For more details, rerun with: -v
+==2211== 
+Running: cpp -D__LWC__ -x c -C preproc.c+ 
+==2211== 
+==2211== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2211== malloc/free: in use at exit: 391993 bytes in 9713 blocks.
+==2211== malloc/free: 13071 allocs, 3358 frees, 1484970 bytes allocated.
+==2211== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2211== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g preproc.c  -c 
+valgrind lwc  cdb.c+ > cdb.c
+==2222== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2222== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2222== Estimated CPU clock rate is 534 MHz
+==2222== For more details, rerun with: -v
+==2222== 
+Running: cpp -D__LWC__ -x c -C cdb.c+ 
+==2222== 
+==2222== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2222== malloc/free: in use at exit: 809077 bytes in 9250 blocks.
+==2222== malloc/free: 21083 allocs, 11833 frees, 3507786 bytes allocated.
+==2222== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2222== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g cdb.c  -c 
+valgrind lwc  parser.c+ > parser.c
+==2233== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2233== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2233== Estimated CPU clock rate is 534 MHz
+==2233== For more details, rerun with: -v
+==2233== 
+Running: cpp -D__LWC__ -x c -C parser.c+ 
+==2233== 
+==2233== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2233== malloc/free: in use at exit: 650283 bytes in 8704 blocks.
+==2233== malloc/free: 21032 allocs, 12328 frees, 3007736 bytes allocated.
+==2233== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2233== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g parser.c  -c 
+valgrind lwc  usage.c+ > usage.c
+==2244== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2244== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2244== Estimated CPU clock rate is 535 MHz
+==2244== For more details, rerun with: -v
+==2244== 
+Running: cpp -D__LWC__ -x c -C usage.c+ 
+==2244== 
+==2244== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2244== malloc/free: in use at exit: 569224 bytes in 7429 blocks.
+==2244== malloc/free: 13116 allocs, 5687 frees, 2385168 bytes allocated.
+==2244== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2244== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g usage.c  -c 
+valgrind lwc  ccexpr.c+ > ccexpr.c
+==2255== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2255== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2255== Estimated CPU clock rate is 535 MHz
+==2255== For more details, rerun with: -v
+==2255== 
+Running: cpp -D__LWC__ -x c -C ccexpr.c+ 
+==2255== 
+==2255== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+==2255== malloc/free: in use at exit: 577893 bytes in 6603 blocks.
+==2255== malloc/free: 19733 allocs, 13130 frees, 3334815 bytes allocated.
+==2255== For a detailed leak analysis,  rerun with: --leak-check=yes
+==2255== For counts of detected errors, rerun with: -v
+gcc -Wall -O2 -g ccexpr.c  -c 
+valgrind lwc  main.c+ > main.c
+==2267== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2267== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2267== Estimated CPU clock rate is 535 MHz
+==2267== For more details, rerun with: -v
+==2267== 
+Running: cpp -D__LWC__ -x c -C main.c+ 
+==2267== 
+==2267== E

@@ -224,7 +224,7 @@ void substitute_output (OUTSTREAM o, Token t, Token r)
 
 void export_output (OUTSTREAM o)
 {
-	int i, k;
+	int i; //, k;
 	ms *p;
 	FILE *pstream = stdout;
 #ifdef DEBUG
@@ -237,7 +237,7 @@ void export_output (OUTSTREAM o)
 	if (debugflag.GENERAL)
 		PRINTF ("+++++++++++++ PROGRAM +++++++++++++\n");
 #endif
-	for (k = 0, p = o->first; p; p = p->next)
+	for (/*k = 0,*/ p = o->first; p; p = p->next)
 		for (i = 0; i < p->i; i++) {
 			fputs (expand (p->data [i]), pstream);
 			fputc (' ', pstream);

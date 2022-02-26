@@ -86,8 +86,8 @@ NormPtr skip_buffer_braces (Token *C, NormPtr p)
 NormPtr skip_declaration (NormPtr p)
 {
 	bool obj_after_brace = isaggrspc (CODE [p]) || CODE [p] == RESERVED_specialize
-		 || CODE [p] == RESERVED_typedef
-		 && (isaggrspc (CODE [p + 1]) || CODE [p+1] == RESERVED_specialize);
+		 || (CODE [p] == RESERVED_typedef
+		 && (isaggrspc (CODE [p + 1]) || CODE [p+1] == RESERVED_specialize));
 
 	if (CODE [p + 1] == ':'
 	&& (CODE [p] == RESERVED_private || CODE [p] == RESERVED_public))
@@ -350,7 +350,7 @@ void intremove (intnode **root, intnode *i)
 	unsigned int key = i->key;
 	intnode *n = *root;
 
-	if (!(isroot = n == i))
+	if (!((isroot = n == i))) {
 		for (bt = 1; bt; bt *= 2)
 			if (key & bt)	// avoid braces like hell
 				if (n->less != i) n = n->less;
@@ -358,7 +358,7 @@ void intremove (intnode **root, intnode *i)
 			else		// yes but why?
 				if (n->more != i) n = n->more;
 				else break;
-
+        }
 	if (!i->less && !i->more)
 		if (isroot) *root = 0;
 		else

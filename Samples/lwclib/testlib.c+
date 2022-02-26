@@ -1,0 +1,118 @@
+extern "stdio.h" {
+#include <stdio.h>
+}
+extern "string.h"{
+#include <string.h>
+}
+extern "stdlib.h" {
+#include <stdlib.h>
+}
+extern "time.h" {
+#include <time.h>
+}
+
+#include "lwclib.h"
+
+static intTree mytree;
+
+class mynode : intNode {
+	char *msg;
+	mynode ();
+	void do_foreach (mynode *m);
+	~mynode ();
+};
+
+mynode.mynode ()
+{
+	(*(intNode*)this).ctor (mytree);
+	char tmp [10];
+	sprintf (tmp, "%i", Key);
+	msg = strdup (tmp);
+}
+
+void mynode.do_foreach ()
+{
+	if (less)
+		((mynode*)less)->do_foreach ();
+	printf ("%i\tHello. Node [%s] in there\n", Key, msg);
+	if (more)
+		((mynode*)more)->do_foreach ();
+}
+
+mynode.~mynode ()
+{
+	free (msg);
+	mytree.intRemove (this);
+}
+
+void inttrees ()
+{
+	int i, r;
+	intNode *n;
+
+	srand (time (NULL));
+	for (i = 0; i < 10240; i++) {
+		r = rand () % 1024;
+		// if in there remove it
+		if ((n = mytree.intFind (r))) delete (mynode*) n;
+		// else add it
+		else new mynode ();
+	}
+
+	if (mytree.root)
+		((mynode*) mytree.root)->do_foreach ();
+}
+
+
+class mystrnode : dbsNodeStr
+{
+	mystrnode ();
+};
+
+static dbsTreeStr wtree;
+
+mystrnode.mystrnode ()
+{
+	str = strdup (wtree.Query);
+	wtree.addself (this);
+}
+
+void dbstest ()
+{
+	char inword [100];
+
+	while (fgets (inword, 100, stdin)) {
+		if (!wtree.dbsFind (inword)) {
+			new mystrnode;
+		}
+	}
+	printf ("ok. %i entries inserted in the dbstree\n", wtree.nnodes);
+	delete wtree.root;
+}
+
+class float_pool : exp_array
+{
+	const PSEG 128;
+	const NSEG 128;
+	const TSEG 32;
+	typedef float X;
+};
+
+void exparrtest ()
+{
+	float_pool F;
+	int i;
+
+	for (i = 0; i < 30000; i++)
+		++F = 3.14;
+	F [1] = F [100] = F [1000] = F [10000] = 1.41123;
+	float *fp = F.freeze ();
+}
+
+int main ()
+{
+	inttrees ();
+	exparrtest ();
+	// the dbstree test expect lots of assorted words in stdin
+	//dbstest ();
+}

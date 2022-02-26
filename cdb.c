@@ -36,7 +36,7 @@ static int en_inc;
 enumID enter_enum (Token e)
 {
 	intnode *n;
-	if (n = intfind (enumtree, e))
+	if ((n = intfind (enumtree, e)))
 		return n->v.i;
 	union ival i = { .i = en_inc };
 	intadd (&enumtree, e, i);
@@ -313,7 +313,7 @@ int is_typename (Token t)
 	if (is_struct (t)) return 2;
 	if (is_enum (t)) return 3;
 	for (i = top_scope; i; --i)
-		if (l = lookup_local_typedef (current_scope [i], t))
+		if ((l = lookup_local_typedef (current_scope [i], t)))
 			return l;
 	return 0;
 }
@@ -324,7 +324,7 @@ bool is_dcl_start (Token t)
 		return ISAGGRSPC (t) || t == RESERVED_specialize || t == RESERVED_RegExp
 			|| t == RESERVED_typeof || ISTBASETYPE(t) || ISDCLFLAG(t);
 	if (!ISSYMBOL (t)) return false;
-	return !is_object_in_scope (t) && is_typename (t) > 0 || t == bt_macro
+	return (!is_object_in_scope (t) && is_typename (t) > 0) || t == bt_macro
 		 || t == RESERVED__CLASS_;
 }
 
@@ -336,7 +336,7 @@ recID lookup_object (Token t)
 
 	if (t == RESERVED__CLASS_)
 		return objective.class;
-	if (r = lookup_struct (t))
+	if ((r = lookup_struct (t)))
 		return r;
 	if ((td = lookup_typedef (t)) != -1 && isstructure (td))
 		return base_of (td);

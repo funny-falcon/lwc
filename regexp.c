@@ -466,7 +466,7 @@ static subReg make_subregulars (regstr R, subReg referrer)
 	if (!R [0])
 		return mallocsubr (SB_NIL, -1, 0, 0, referrer)->this;
 
-	if (n = find_or (R, ors)) {
+	if ((n = find_or (R, ors))) {
 		int from, to;
 		from = regexp_INFTY, to = 0;
 		for (i = 0; i < n; i++) {
@@ -2183,7 +2183,7 @@ static NormPtr parse_regexp_dcl (NormPtr p)
 
 	regexp_strfuncs = regexp_case = 1;
 	regexp_anon = regexp_packed = regexp_noextract = regexp_noctbl = 0;
-	if (CODE [p] == ',')
+	if (CODE [p] == ',') {
 		for (++p; ISSYMBOL (CODE [p]); p++)
 		if (!tokcmp (CODE [p], "NOCASE")) regexp_case = 0;
 		else if (!tokcmp (CODE [p], "PACKED")) regexp_packed = 1;
@@ -2191,6 +2191,7 @@ static NormPtr parse_regexp_dcl (NormPtr p)
 		else if (!tokcmp (CODE [p], "NOCTBL")) regexp_noctbl = 1;
 		else if (!tokcmp (CODE [p], "NOSTRFUNC")) regexp_strfuncs = 0;
 		else parse_error (p, "Unrecognized regexp option");
+        }
 	if (CODE [p++] != ')')
 		parse_error (p, "RegExp definition");
 

@@ -1,0 +1,11 @@
+
+This demonstrates:
+
+	- templates. Interface + Implementation
+	- dbsTrees.
+
+To run the program, give it words in the standard input.
+For example:
+
+	cat /usr/dict/words | mix-scramble | ./a.out
+

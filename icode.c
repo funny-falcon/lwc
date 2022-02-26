@@ -66,7 +66,7 @@ Token i_downcast_function (recID rb, recID rd)
 	rd = aliasclass (rd);
 	rb = aliasclass (rb);
 	bdi = rb + rd * 3000;
-	if (n = intfind (dcasts, bdi)) return n->v.i;
+	if ((n = intfind (dcasts, bdi))) return n->v.i;
 
 	Token base = name_of_struct (rb), der = name_of_struct (rd);
 	Token fname = name_downcast (base, der);
@@ -101,7 +101,7 @@ Token i_downcast_function (recID rb, recID rd)
 	if (!va) {
 		outprintf (IC,
 			'(', iRESERVED_struct (rd), der, '*', ')',
-			'(', VOIDCAST, x, '-', '(', RESERVED_int, ')', '&',
+			'(', VOIDCAST, x, '-', '(', RESERVED_ssz_t, ')', '&',
 			'(', '(', '(', iRESERVED_struct (rd), der, '*', ')',
 			RESERVED_0, ')', POINTSAT, ISTR (path), ')', ')', -1);
 	} else if (path [1] == -1) {

@@ -112,6 +112,8 @@ static NormPtr bt_builtin (Dclbase *b, NormPtr p)
 		ncase RESERVED_long: lo++;
 		ncase RESERVED_signed: si++;
 		ncase RESERVED_unsigned: us++;
+		ncase RESERVED_ssz_t: us++;
+		ncase RESERVED_usz_t: us++;
 		ndefault: bt = CODE [p];
 		}
 
@@ -186,11 +188,12 @@ static NormPtr bt_name (Dclbase *b, NormPtr p)
 	bool iname = false;
 
 	if ((x = CODE [p]) == RESERVED__CLASS_) {
-		if ((x = name_of_struct (current_scope [top_scope])) == NOOBJ)
-			if (r = is_object_in_global (p)) {
+		if ((x = name_of_struct (current_scope [top_scope])) == NOOBJ) {
+			if ((r = is_object_in_global (p))) {
 				x = name_of_struct (r);
 				goto keep;
 			} else parse_error (p, "_CLASS_ invalid here");
+                }
 		if (PARENT_AUTOFUNCS) keep: {
 			/* Special case: _CLASS_ in the prototype of an
 			   auto-function.  Leave it as _CLASS_ and later
@@ -209,7 +212,8 @@ static NormPtr bt_name (Dclbase *b, NormPtr p)
 	b->btname = x;
 
 	if (0)
-	redo: iname = 1; switch (y = is_typename (x)) {
+            redo: iname = 1;
+        switch (y = is_typename (x)) {
 	case 0:
 		/* Feature: template abstract classes */
 		if (bt_macro && x == bt_macro) {
@@ -220,13 +224,13 @@ static NormPtr bt_name (Dclbase *b, NormPtr p)
 		if (top_scope) {
 			int i;
 			for (i = top_scope; i; --i)
-				if (t = lookup_local_typedef (current_scope [i], x)) {
+				if ((t = lookup_local_typedef (current_scope [i], x))) {
 					x = t;
 					goto redo;
 				}
 		}
 		if ((r = is_object_in_global (p)))
-			if (x = lookup_local_typedef (r, x))
+			if ((x = lookup_local_typedef (r, x)))
 				goto redo;
 		/* - - - - - - - - - - - - - - - - - - - - */
 		if (is_extern_templ_func (&p)) {
@@ -667,15 +671,16 @@ static NormPtr operator_overload (NormPtr p, int memb)
 
 	if (postfix) ++p;
 	Token op = CODE [p];
-	if (op == '[' || op == '(' && in2 (CODE [p + 1], ')', RESERVED_oper_fcall)) ++p;
+	if (op == '[' || (op == '(' && in2 (CODE [p + 1], ')', RESERVED_oper_fcall))) ++p;
 
 	/*** kludgy: "operator +" is replaced by "operator operfunc_name" in
 	 *** the CODE[] so next time we return early.  A premature optimization!
 	 ***/
-	if (!isoperator (op))
+	if (!isoperator (op)) {
 		if (isoperfunc (op))
 			return p;
 		else parse_error_pt (p, op, "not an operator");
+        }
 	if (CODE [p + 1] != '(')
 		parse_error (p, "operator overload is a function");
 	memb += count_argc (p + 2);
@@ -1035,13 +1040,13 @@ static void mk_specialized (char nm[], NormPtr p, Token have[], bool anydcl)
 			continue;
 		}
 
-		if (CODE [p] != RESERVED_typedef)
+		if (CODE [p] != RESERVED_typedef) {
 			if (anydcl) {
 				p = skip_declaration (p);
 				continue;
 			} else parse_error (p, "specialized object may not have"
 						" declarations other than typedefs");
-
+                }
 		Dclbase b = { .dclqual_i = 0, .section = 0, .class_name = -1 };
 		Dclobj d = DCLOBJ_INIT;
 		typeID dt;
@@ -1157,9 +1162,10 @@ NormPtr struct_declaration (recID r, OUTSTREAM D, NormPtr p)
 	d.maybe_ctor = b.maybe_ctor;
 	d.const_in_base = b.isconst;
 
-	if (b.basetype == BASETYPE_ABSTRACT)
+	if (b.basetype == BASETYPE_ABSTRACT) {
 		if (CODE [p] == ';') return p + 1;
 		else parse_error (p, "It is not possible to have objects of abstract classes");
+        }
 	if (b.basetype == BASETYPE_SKIP)
 		return p;
 
@@ -1385,10 +1391,10 @@ static NormPtr struct_typedef (recID r, NormPtr p)
 	p = parse_basetype (&b, last_location = p);
 	d.const_in_base = b.isconst;
 
-	if (b.basetype == BASETYPE_ABSTRACT)
+	if (b.basetype == BASETYPE_ABSTRACT) {
 		if (CODE [p] == ';') return p + 1;
 		else parse_error (p, "It is not possible to have objects of abstract classes");
-
+        }
 	for (;;) {
 
 		p = parse_dcl (&d, p, 0);
@@ -1745,7 +1751,7 @@ NormPtr gen_array_ctors (OUTSTREAM O, NormPtr p, typeID t, Token obj, int *N, bo
 	if (isstructarr (t) && always_unwind (base_of (t))) throwing = true;
 	throwing &= dstruct;
 
-	if (dstruct)
+	if (dstruct) {
 		if (EHUnwind)
 			outprintf (O, RESERVED_struct, arrdtor, u1, cleanup_func (dto), '=', '{',
 				   obj, ',', RESERVED_0, '}', ';', -1);
@@ -1755,7 +1761,7 @@ NormPtr gen_array_ctors (OUTSTREAM O, NormPtr p, typeID t, Token obj, int *N, bo
 			add_auto_destruction (u1, dto, throwing);
 			if (throwing) push_unwind (O, dto, u1);
 		}
-
+        }
 	open_local_scope ();
 	enter_local_obj (obj, t);
 	while (CODE [p] != '}') {
@@ -1763,12 +1769,12 @@ NormPtr gen_array_ctors (OUTSTREAM O, NormPtr p, typeID t, Token obj, int *N, bo
 		p = skip_expression (CODE, ps = p + dot, INIT_EXPR);
 		sintprintf (cexpr, obj, '[', tcnt = new_value_int (cnt++), ']', '.', -1);
 		if (!dot) intcatc (cexpr, RESERVED_ctor);
-		if (enc = (CODE [ps] != '(' || CODE [p - 1] != ')') && !dot)
+		if ((enc = (CODE [ps] != '(' || CODE [p - 1] != ')') && !dot))
 			intcatc (cexpr, '(');
 		intextract (cexpr + intlen (cexpr), &CODE [ps], p - ps);
 		if (enc) intcatc (cexpr, ')');
 		CLEAR_MAYTHROW;
-		if (ctexpr = rewrite_ctor_expr (intdup (cexpr))) {
+		if ((ctexpr = rewrite_ctor_expr (intdup (cexpr)))) {
 			if (throwing && !TEST_MAYTHROW)
 				outprintf (O, u1, '.', RESERVED_i, '=', tcnt, ';', -1);
 			outprintf (O, '{', ISTR (ctexpr), ';', '}', -1);
@@ -1793,7 +1799,7 @@ NormPtr gen_array_ctors (OUTSTREAM O, NormPtr p, typeID t, Token obj, int *N, bo
 		output_itoken (O, ')');
 		enter_local_obj (cc, typeID_int);
 		sintprintf (cexpr, obj, '[', cc, ']', '.', RESERVED_ctor, '(', ')', -1);
-		if (ctexpr = rewrite_ctor_expr (intdup (cexpr))) {
+		if ((ctexpr = rewrite_ctor_expr (intdup (cexpr)))) {
 			outprintf (O, ISTR (ctexpr), ';', -1);
 			free (ctexpr);
 		}
@@ -1904,8 +1910,8 @@ NormPtr local_declaration (OUTSTREAM O, NormPtr p)
 
 		if (d.dclstr [d.objp] == BLANKT || d.dclstr [d.objp] == RESERVED__) {
 			/* Feature: anoymous obj call ctor thingy */
-			if (isstructure (dt) && (CODE [p] == '(' 
-			|| CODE [p + 1] == '(' && ISSYMBOL (CODE [p]))) {
+			if (((isstructure (dt) && (CODE [p] == '('))
+			|| (CODE [p + 1] == '(' && ISSYMBOL (CODE [p])))) {
 				Token t = internal_identifier1 ();
 				int basetype = base_of (dt);
 
@@ -1962,11 +1968,11 @@ NormPtr local_declaration (OUTSTREAM O, NormPtr p)
 					if (typeof_expression (p + 1, INIT_EXPR) == dt
 					&& !has_copy_ctor (base_of (dt)))
 						ctor_assign = false;
-				if (!spec_init && !ctor_assign)
+				if (!spec_init && !ctor_assign) {
 					if (!mult_init) p = local_initializer (D, p + 1, dt);
 					else p = multiple_array_ctors (D, p + 1, dt, d.dclstr
 						[d.objp], d.dclstr, &para_code, b.is__unwind__);
-
+                                }
 				RESTOR_VAR (local_name);
 				RESTOR_VAR (local_type);
 			}
@@ -2010,7 +2016,7 @@ NormPtr local_declaration (OUTSTREAM O, NormPtr p)
 			/* ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
 
 			/* Feature: construction of objects */
-			if (CODE [p] == '(' || CODE [p + 1] == '(' && ISSYMBOL (CODE [p]))
+			if (CODE [p] == '(' || (CODE [p + 1] == '(' && ISSYMBOL (CODE [p])))
 				p = call_ctor (I, d.dclstr [d.objp], p);
 			else if (!hadinit && isstructure (dt)
 			       && has_void_ctor (base_of (dt)))
@@ -2023,7 +2029,7 @@ NormPtr local_declaration (OUTSTREAM O, NormPtr p)
 			Token *initcode = combine_output (I);
 
 			/* Feature: static objects that are ctored once */
-			if (b.isstatic)
+			if (b.isstatic) {
 				if ((static_ctorable = b.isstatic && static_ctorable)) {
 					Token nn = name_glob_static_local (d.dclstr [d.objp]);
 					Token *dc = combine_output (D);
@@ -2036,6 +2042,7 @@ NormPtr local_declaration (OUTSTREAM O, NormPtr p)
 					initcode [0] = -1;
 					globalized_recent_obj (nn);
 				} else outprintf (O, ISTR (combine_output (D)), -1);
+                        }
 			/* ++++++++++++++++++++++++++++++++++++++++++++ */
 
 
@@ -2093,6 +2100,14 @@ static NormPtr global_initializer (OUTSTREAM OSTR, Token obj, NormPtr p, typeID 
 		free (E.newExpr);
 	}
 	return p;
+}
+
+static NormPtr skip_attribute(NormPtr p, const char *attribute_str)
+{
+        if (CODE [p++] != '(')
+                parse_error (p, attribute_str);
+        p = skip_parenthesis (p);
+        return p;
 }
 
 static NormPtr global_declaration (NormPtr p, bool linkonce)
@@ -2235,7 +2250,7 @@ static	int ctorno;
 			   before declaring the object name because it's global
 			   and the object name could not possibly refer to
 			   an outer scope  */
-			if (CODE [p] == '(' || ISSYMBOL (CODE [p]) && CODE [p + 1] == '(')
+			if (CODE [p] == '(' || (ISSYMBOL (CODE [p]) && CODE [p + 1] == '('))
 				p = call_ctor (GLOBAL_INIT_FUNC, d.dclstr [d.objp], p);
 			else if (CODE [p] == '=')
 				p = global_initializer (OSTR, d.dclstr [d.objp], p + 1, dt);
@@ -2245,9 +2260,16 @@ static	int ctorno;
 		skipper:
 			output_itoken (OSTR, ';');
 		}
+                try_attribute:
 		if (CODE [p] == ';') break;
-		if (CODE [p++] != ',')
-			parse_error_pt (p, CODE [p-1], "invalid declaration separator");
+                switch(CODE [p]) {
+                    case RESERVED___asm__: p = skip_attribute(++p, "__asm__ '('"); goto try_attribute;
+                    case RESERVED___attribute__: p = skip_attribute(++p, "__attribute__ '('"); goto try_attribute;
+                    case ',': break;
+                    default:
+                        parse_error_pt (p, CODE [p], "invalid declaration separator");
+                }
+                ++p;
 	}
 
 	return p + 1;

@@ -1,0 +1,770 @@
+#include "global.h"
+#include "raytrace.h"
+#include "observer.h"
+
+void Vec.printf (const char *s)
+{
+	printf (s, x, y, z);
+}
+
+Vec Viewer, Ray;
+
+/*
+ * Orient flat surfaces so that the vertice always points
+ * to the character
+ */
+
+class flat_surface : surface
+{
+   public:
+	Vec vertice;
+	void orient (Vec);
+};
+
+void flat_surface.orient (Vec v)
+{
+	if (vertice.inprod (v) < 0.0f)
+		vertice.fmul (-1.0f);
+}
+
+/*
+ * Orthogonal parallelogram surfaces.
+ *
+ * One could say that these are exceptional cases
+ * and that we should study a more general case of
+ * polygons. However, we make the world and we will
+ * use mostly orthogonal parallelograms to construct it.
+ */
+class orthogonal_parallelogram_vb : flat_surface
+{
+	Vec P1, P2, P3, P4;
+	Vec D1, D2;
+inline	void calc_P4 ();
+	float l2, l3;
+   public:
+	ctor (Vec, Vec, Vec);
+	void land ();
+};
+
+inline void orthogonal_parallelogram_vb.calc_P4 ()
+{
+	P4 = P1, P4.add (P3), P4.sub (P2);
+}
+
+orthogonal_parallelogram_vb.ctor (Vec p1, Vec p2, Vec p3)
+{
+	P1 = p1, P2 = p2, P3 = p3, calc_P4 ();
+	D1 = P2;
+	D1.sub (P1);
+	D2 = P3;
+	D2.sub (P2);
+	vertice.external_product (D1, D2);
+	vertice.norm ();
+}
+
+void orthogonal_parallelogram_vb.land ()
+{
+#define FOOT_LENGTH 5.3f
+	float e [12];
+	e [0] = D1.x, e [1] = D2.x, e [2]  = vertice.x, e [3]  = Viewer.x - P1.x;
+	e [4] = D1.y, e [5] = D2.y, e [6]  = vertice.y, e [7]  = Viewer.y - P1.y;
+	e [8] = D1.z, e [9] = D2.z, e [10] = vertice.z, e [11] = Viewer.z - P1.z;
+	gauss (e);
+
+	Viewer = P1;
+	Vec tmp = D1;
+	tmp.fmul (e [0]);
+	Viewer.add (tmp);
+	tmp = D2;
+	tmp.fmul (e [1]);
+	Viewer.add (tmp);
+	tmp = vertice;
+	tmp.fmul (FOOT_LENGTH);
+	Viewer.add (tmp);
+}
+
+/*
+ * Sphere
+ */
+
+class sphere : surface
+{
+	Vec C;
+	float r;
+	float rr;
+	Vec O;
+	float dr;
+   public:
+	ctor (Vec, float);
+inline	bool hits ();
+	void precalc_for_viewer ();
+};
+
+sphere.ctor (Vec v, float rad)
+{
+	C = v;
+	r = rad;
+	rr = rad*rad;
+}
+
+void sphere.precalc_for_viewer ()
+{
+	O = Viewer;
+	O.sub (C);
+	dr = O.sqr_length () - rr;
+}
+
+bool sphere.hits ()
+{
+	float g = O.inprod (Ray);
+	float Delta = g * g - dr;
+
+	if (Delta < 0.0f)
+		return false;
+
+	l1 = - 0.5f * g - sqrtf (Delta);
+	return l1 > 0.0f;
+}
+
+/*
+ * Functions to compute the llight reflection of matte
+ * orthogonal parallelogram surfaces
+ *
+ * In general, the reflection of light on a matte surface
+ * is analogous to cos(a) which is the angle at which the
+ * light hits the surface.
+ */
+
+template matte_orthogonal_parallelogram (pren, prec, Lsource) {
+#define preMatte pren><coln><Lsource
+#define preMattev pren><coln><Lsource><vec
+
+	float preMatte;
+	Vec preMattev;
+
+	void prec ()
+	{
+		float e [12];
+		e [0] = D1.x, e [1] = D2.x, e [2]  = vertice.x, e [3]  = Lsource.x - P1.x;
+		e [4] = D1.y, e [5] = D2.y, e [6]  = vertice.y, e [7]  = Lsource.y - P1.y;
+		e [8] = D1.z, e [9] = D2.z, e [10] = vertice.z, e [11] = Lsource.z - P1.z;
+		gauss (e);
+
+#ifdef MATTE_SQR
+		preMatte = vertice.sqr_length () * e [2] * e [2];
+#else
+		preMatte = vertice.length () * fabsf (e [2]);
+#endif
+	}
+
+	void pren ()
+	{
+		preMattev = Viewer;
+		preMattev.sub (Lsource);
+	}
+
+	RGB hitcolor ()
+	{
+		Vec t = Ray;
+		t.fmul (l1);
+		t.add (preMattev);
+
+#ifdef MATTE_SQR
+		float cosa = preMatte / t.sqr_length ();
+#else
+		float cosa = preMatte / t.length ();
+#endif
+
+		cosa *= 190.0f;
+		int cc = 44 + cosa;
+		return rgbcolor (4*cc/5, cc, cc);
+	}
+}
+
+/*
+ * Orthogonal parallelograms parallel to two of the three axis
+ *
+ * Special but frequent case
+ */
+
+template orthogonal_parallelogram_ideal (name, X, Y, Z) {
+	class name : orthogonal_parallelogram_vb
+	{
+		float Divizor;
+		float dVPy, dVPz;
+	   public:
+		ctor (Vec, Vec, Vec);
+	inline	bool hits ();
+	inline	void precalc_for_viewer ();
+	};
+
+	name.ctor (Vec p1, Vec p2, Vec p3)
+	{
+		(*(orthogonal_parallelogram_vb*)this).ctor (p1, p2, p3);
+		if (zero (D2.Y)) {
+			Vec tmp = D1;
+			D1 = D2;
+			D2 = tmp;
+		}
+		Divizor = 1.0f / (D2.Z * D1.Y - D1.Z * D2.Y);
+	}
+
+	void name.precalc_for_viewer ()
+	{
+		dVPy = Viewer.Y - P1.Y;
+		dVPz = Viewer.Z - P1.Z;
+	}
+
+	bool name.hits ()
+	{
+		float lray = (P1.X - Viewer.X) / Ray.X;
+		if (lray < 0.0f)
+			return false;
+		l1 = lray;
+		float hit_y = dVPy + lray * Ray.Y;
+		float hit_z = dVPz + lray * Ray.Z;
+		lray = (hit_y * D2.Z - hit_z * D2.Y) * Divizor;
+		if (lray < 0.0f || lray > 1.0f)
+			return false;
+		l2 = lray;
+		lray = (hit_y - lray * D1.Y) / D2.Y;
+		if (lray < 0.0f || lray > 1.0f)
+			return false;
+		l3 = lray;
+		return true;
+	}
+}
+
+orthogonal_parallelogram_ideal (orthogonal_parallelogram_x0, x, y, z)
+orthogonal_parallelogram_ideal (orthogonal_parallelogram_y0, y, x, z)
+orthogonal_parallelogram_ideal (orthogonal_parallelogram_z0, z, y, x)
+
+/*
+ * Infinite ground. Z==constant
+ *
+ * We may as well draw checkers on it!
+ */
+
+class ground : flat_surface
+{
+	float Z;
+   public:
+	ctor (float);
+inline	bool hits ();
+inline	RGB hitcolor ();
+};
+
+ground.ctor (float z)
+{
+	Z = z;
+	vertice.ctor (0, 0, 1);
+}
+
+bool ground.hits ()
+{
+	if (zero (Ray.z))
+		return false;
+	float f = (Z - Viewer.z) / Ray.z;
+	if (f < 0)
+		return false;
+	l1 = f;
+	return true;
+}
+
+bool DOWAAR;
+
+RGB ground.hitcolor ()
+{
+	float l1 = l1;
+	float x = Viewer.x + Ray.x * l1;
+	float y = Viewer.y + Ray.y * l1;
+
+	if (DOWAAR) {
+		x *= 0.01f;
+		y *= 0.01f;
+		float z = hypotf (x, y);
+		x = 2.0f * x * y * cosf (sqrtf(fabsf(x))+y);
+		y = z;
+	}
+
+	int ix = ((int) (x/(1.1f*METRIC)))&1;
+	int iy = ((int) (y/METRIC))&1;
+	return ix^iy ? rgbcolor (160, 50, 50) : rgbcolor (30, 30, 30);
+}
+
+/*
+ * A test world
+ */
+
+class testworld1 : surface
+{
+#define ZZ0 (1.0f * METRIC)
+#define ZZ1 (1.0f * METRIC)
+	ground G;
+	orthogonal_parallelogram_x0 P, E;
+	orthogonal_parallelogram_y0 Ps;
+	orthogonal_parallelogram_z0 Pz;
+	RGB retcol;
+   public:
+	ctor ();
+inline	bool hits ();
+inline	RGB hitcolor ()	{ return retcol; }
+	void precalc_for_viewer ();
+};
+
+testworld1.ctor ()
+{
+	G.ctor (ZZ0);
+	float X1 = 35.9f*ZZ0;
+	float DX1 = 30.1f*ZZ0;
+	float Y1 = 2.9f*ZZ0;
+	float DY1 = 4.2f*ZZ1;
+	float Z1 = ZZ0;
+	float DZ1 = 8.2f*ZZ1;
+	{
+		Vec V1 (X1, Y1, Z1),
+		    V2 (X1, Y1+DY1, Z1),
+		    V3 (X1, Y1+DY1, Z1+DZ1);
+		P.ctor (V1, V2, V3);
+	}
+	{
+		Vec V1 (X1, Y1, Z1),
+		    V2 (X1+DX1, Y1, Z1),
+		    V3 (X1+DX1, Y1, Z1+DZ1);
+		Ps.ctor (V1, V2, V3);
+	}
+	{
+		Vec V1 (X1, Y1, Z1+DZ1),
+		    V2 (X1+DX1, Y1, Z1+DZ1),
+		    V3 (X1+DX1, Y1+DY1, Z1+DZ1);
+		Pz.ctor (V1, V2, V3);
+	}
+	{
+		Vec V1 (145.9f*ZZ0, 0.9f*ZZ0, ZZ0),
+		    V2 (145.9f*ZZ0, 0.9f*ZZ0+3.2f*ZZ1, ZZ0),
+		    V3 (145.9f*ZZ0, 0.9f*ZZ0+3.2f*ZZ1, ZZ0+19.2f*ZZ1);
+		E.ctor (V1, V2, V3);
+	}
+}
+
+bool testworld1.hits ()
+{
+	if (P.hits ()) {
+		if (Ps.hits ())
+			if (Ps.l1 < P.l1) goto Pshit;
+		if (Pz.hits ())
+			if (Pz.l1 < P.l1) goto Pzhit;
+		int v = (P.l2 * 254.0);
+		retcol = rgbcolor (v, v, v);
+		return true;
+	}
+	if (Ps.hits ()) {
+		if (Pz.hits ())
+			if (Pz.l1 < Ps.l1) goto Pzhit;
+	Pshit:;
+		int v = (Ps.l2 * 254.0f);
+		retcol = rgbcolor (v, v, v);
+		return true;
+	}
+	if (Pz.hits ()) {
+	Pzhit:;
+		int v = 100;
+		retcol = rgbcolor (v, v, v);
+		return true;
+	}
+	if (E.hits ()) {
+		int v = 255 - (int)(E.l2 * 254.0f);
+		retcol = rgbcolor (v, v, v);
+		return true;
+	}
+	if (G.hits ()) {
+		retcol = G.hitcolor ();
+		return true;
+	}
+	return false;
+}
+
+void testworld1.precalc_for_viewer ()
+{
+	P.precalc_for_viewer ();
+	Ps.precalc_for_viewer ();
+	Pz.precalc_for_viewer ();
+	E.precalc_for_viewer ();
+}
+
+void testworld1_main ()
+{
+	int mv;
+	testworld1 World;
+	RGB skycolor = rgbcolor (3, 4, 4);
+
+	Viewer.ctor (-64.0f * METRIC, ZZ0, ZZ0 * 1.5f);
+	DV1.ctor (1, 0, 0);
+	DVx.ctor (0, 1, 0);
+	DVy.external_product (DV1, DVx);
+	normalizeDs ();
+
+	DOWAAR = false;
+
+	for (mv = 0; mv < 170; mv++) {
+		rotate_observer (0.01f);
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor);
+		v_blitt ();
+	}
+	for (mv = 0; mv < 600; mv++)
+	{
+		rotate_observer (0.002f);
+		move_fwd (0.2f * METRIC);
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor)
+		v_blitt ();
+	}
+	for (mv = 0; mv < 270; mv++) {
+		rotate_observer (0.01f);
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor);
+		v_blitt ();
+	}
+	for (mv = 0; mv < 600; mv++)
+	{
+		rotate_observer (0.0005f);
+		move_fwd (0.4f * METRIC);
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor)
+		v_blitt ();
+	}
+
+	Viewer.ctor (-164.0f * METRIC, ZZ0, ZZ0 * 1.5f);
+	DV1.ctor (1, 0, 0);
+	DVx.ctor (0, 1, 0);
+	DVy.external_product (DV1, DVx);
+	normalizeDs ();
+
+	DOWAAR = true;
+
+	for (mv = 0; mv < 200; mv++)
+	{
+		Viewer.x += 0.2f * METRIC;
+		Viewer.z += 0.04f * METRIC;
+		if (mv > 80) Viewer.z += 0.08f * METRIC;
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor)
+		v_blitt ();
+	}
+
+	for (mv = 0; mv < 4000; mv++)
+	{
+		Viewer.x += 2.47f * METRIC;
+		if (Viewer.z > 1.8f*ZZ0)
+			Viewer.z -= 0.07f * METRIC;
+		else Viewer.z += 0.8f * cosf (2.8f * 3.14f * mv / 100.0f);
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor)
+		v_blitt ();
+	}
+
+}
+
+/*
+ * Another test world. Lets see things from inside a cube!!
+ * Wow. This is so exciting. I think I'll wet my pants!
+ */
+
+Vec Candle;
+
+class orthp_matte_x0 : orthogonal_parallelogram_x0 {
+   public:
+	matte_orthogonal_parallelogram (precalc_matte, precalc_light, Candle)
+	void precalc_for_viewer ();
+};
+
+void orthp_matte_x0.precalc_for_viewer ()
+{
+	(*(orthogonal_parallelogram_x0*)this).precalc_for_viewer ();
+	precalc_matte ();
+}
+
+class orthp_matte_y0 : orthogonal_parallelogram_y0 {
+   public:
+	matte_orthogonal_parallelogram (precalc_matte, precalc_light, Candle)
+	void precalc_for_viewer ();
+};
+
+void orthp_matte_y0.precalc_for_viewer ()
+{
+	(*(orthogonal_parallelogram_y0*)this).precalc_for_viewer ();
+	precalc_matte ();
+}
+
+class orthp_matte_z0 : orthogonal_parallelogram_z0 {
+   public:
+	matte_orthogonal_parallelogram (precalc_matte, precalc_light, Candle)
+	void precalc_for_viewer ();
+};
+
+void orthp_matte_z0.precalc_for_viewer ()
+{
+	(*(orthogonal_parallelogram_z0*)this).precalc_for_viewer ();
+	precalc_matte ();
+}
+
+
+class testworld2 : surface
+{
+	orthp_matte_x0 W1, W2;
+	orthp_matte_y0 W3, W4;
+	orthp_matte_z0 W5, W6;
+   public:
+	float X0, Y0, Z0, DX, DY, DZ;
+	ctor ();
+inline	bool hits ();
+inline	RGB hitcolor ();
+	void precalc_for_viewer ();
+};
+
+testworld2.ctor ()
+{
+	DX = 90.0f*ZZ0;
+	DY = 90.0f*ZZ0;
+	DZ = 3.2f*ZZ0;
+	Z0 = Y0 = X0 = 0.2f*ZZ0;
+
+	Candle.ctor (X0 + 0.2f*DX, Y0 + 0.2f*DX, Z0 + 0.9f * DZ);
+
+	template ctor_vector (V, c, x1, y1, z1, x2, y2, z2, x3, y3, z3)
+	{{
+	 Vec V1 (X0+x1, Y0+y1, Z0+z1),
+	     V2 (X0+x2, Y0+y2, Z0+z2),
+	     V3 (X0+x3, Y0+y3, Z0+z3);
+ 	  V.ctor (V1, V2, V3);
+	  V.orient (Candle);
+	  V.plaincol = rgbcolor (c, c, c);
+	  V.precalc_light ();
+	}}
+
+	ctor_vector (W1, 10, 0, 0, 0, 0, DY, 0, 0, DY, DZ)
+	ctor_vector (W2, 30, DX, 0, 0, DX, DY, 0, DX, DY, DZ)
+	ctor_vector (W3, 50, 0, 0, 0, DX, 0, 0, DX, 0, DZ)
+	ctor_vector (W4, 80, 0, DY, 0, DX, DY, 0, DX, DY, DZ)
+	ctor_vector (W5, 120, 0, 0, 0, 0, DY, 0, DX, DY, 0)
+	ctor_vector (W6, 175, 0, 0, DZ, 0, DY, DZ, DX, DY, DZ)
+}
+
+bool testworld2.hits ()
+{
+	template testhit (XX) {
+		if (XX.hits ()) {
+			 plaincol = XX.hitcolor ();
+			 return true;
+		}}
+	testhit (W5)
+	testhit (W6)
+	testhit (W1)
+	testhit (W2)
+	testhit (W3)
+	W4.hits ();
+	plaincol = W4.hitcolor ();
+	return true;
+}
+
+RGB testworld2.hitcolor ()
+{
+	return plaincol;
+}
+
+void testworld2.precalc_for_viewer ()
+{
+	W1.precalc_for_viewer ();
+	W2.precalc_for_viewer ();
+	W3.precalc_for_viewer ();
+	W4.precalc_for_viewer ();
+	W5.precalc_for_viewer ();
+	W6.precalc_for_viewer ();
+}
+
+void testworld2_main ()
+{
+	int mv;
+	testworld2 World;
+	RGB skycolor = rgbcolor (3, 4, 4);
+
+	Viewer.ctor (World.X0 + World.DX/4, World.Y0 + World.DY/2, World.Z0 + World.DZ*0.2);
+	DV1.ctor (1, 0, 0);
+	DVx.ctor (0, 1, 0);
+	DVy.external_product (DV1, DVx);
+	normalizeDs ();
+	//World.W5.land ();
+
+#if 1
+	for (mv = 0; mv < 770; mv++) {
+		rotate_observer (-0.017f);
+		move_fwd (0.18f*METRIC);
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor);
+		v_blitt ();
+	}
+#else
+
+	for (;;) {
+		mv = x_input ();
+		if (mv == -1)
+			continue;
+		switch (mv) {
+		case '.':  rotate_observer (0.0187f);
+		ncase ',': rotate_observer (-0.0187f);
+		ncase 'p': move_fwd (0.7*METRIC);
+		ncase 'l': move_fwd (-0.7*METRIC);
+		ncase 'q': return;
+		}
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor);
+		v_blitt ();
+	}
+#endif
+
+}
+
+/*
+ * Another more complex world. A kitchen?
+ * This is just to get some XP in the design
+ */
+
+class testworld3
+{
+	orthp_matte_x0 W1, W2, S1, S2;
+	orthp_matte_y0 W3, W4, S3, S4;
+	orthp_matte_x0 B1;
+	orthp_matte_z0 W5, W6, S5, B2;
+	sphere S;
+	RGB plaincol;
+   public:
+	float X0, Y0, Z0, DX, DY, DZ, BZ, BX;
+	float SX0, SY0, DSX, DSY, DSZ;
+	ctor ();
+inline	bool hits ();
+inline	RGB hitcolor ();
+	void precalc_for_viewer ();
+};
+
+testworld3.ctor ()
+{
+	X0 = Y0 = Z0 = 1.0f;
+	DX = 400.0f*METRIC; DY = 270.0f * METRIC;
+	DZ = 182.0f * METRIC;
+	BZ = 0.3f * DZ;
+	BX = 0.2f * DX;
+	DSY = DSX = 0.8f * BX;
+	DSZ = 0.2f * BZ;
+
+	Candle.ctor (X0 + 0.3*DX, Y0 + 0.6f*DY, Z0 + 0.8f*DZ);
+
+	S.ctor (Candle, 5.0f * METRIC);
+	ctor_vector (W1, 1, 0, 0, 0, 0, DY, 0, 0, DY, DZ);
+	ctor_vector (W2, 1, DX, 0, 0, DX, DY, 0, DX, DY, DZ);
+	ctor_vector (W3, 1, 0, 0, 0, DX, 0, 0, DX, 0, DZ);
+	ctor_vector (W4, 1, 0, DY, 0, DX, DY, 0, DX, DY, DZ);
+	ctor_vector (W5, 1, 0, 0, 0, DX, 0, 0, DX, DY, 0);
+	ctor_vector (W6, 1, 0, 0, DZ, DX, 0, DZ, DX, DY, DZ);
+	ctor_vector (B1, 1, BX, 0, 0, BX, DY, 0, BX, DY, BZ);
+	ctor_vector (B2, 1, 0, 0, BZ, BX, 0, BZ, BX, DY, BZ);
+}
+
+bool testworld3.hits ()
+{
+	if (S.hits ()) {
+		plaincol = rgbcolor (254, 255, 204);
+		return true;
+	}
+	if (B1.hits ()) {
+		if (B2.hits () && B2.l1 < B1.l1)
+			goto B2hits;
+		plaincol = B1.hitcolor ();
+		return true;
+	}
+	if (B2.hits ()) {
+	B2hits:
+		plaincol = B2.hitcolor ();
+		return true;
+	}
+	testhit (W1);
+	testhit (W2);
+	testhit (W3);
+	testhit (W4);
+	testhit (W5);
+	testhit (W6);
+	return false;
+}
+
+RGB testworld3.hitcolor ()
+{
+	return plaincol;
+}
+
+void testworld3.precalc_for_viewer ()
+{
+	W1.precalc_for_viewer ();
+	W2.precalc_for_viewer ();
+	W3.precalc_for_viewer ();
+	W4.precalc_for_viewer ();
+	W5.precalc_for_viewer ();
+	W6.precalc_for_viewer ();
+	B1.precalc_for_viewer ();
+	B2.precalc_for_viewer ();
+	S.precalc_for_viewer ();
+}
+
+void testworld3_main ()
+{
+	int mv;
+	testworld3 World;
+	RGB skycolor = rgbcolor (3, 4, 4);
+
+	Viewer.ctor (World.X0 + World.DX*0.9f, World.Y0 + 0.8f*World.DY, World.Z0 + World.DZ*0.5);
+	DV1.ctor (-1, 0, 0);
+	DVx.ctor (0, -1, 0);
+	DVy.external_product (DV1, DVx);
+	World.W5.land ();
+	normalizeDs ();
+	World.precalc_for_viewer ();
+	raytrace (World, skycolor);
+	v_blitt ();
+	for (;;) {
+		mv = x_input ();
+		if (mv == -1)
+			continue;
+		switch (mv) {
+		case '.':  rotate_observer (0.0187f);
+		ncase ',': rotate_observer (-0.0587f);
+		ncase 'p': move_fwd (1.7*METRIC);
+		ncase 'l': move_fwd (-1.7*METRIC);
+		ncase 'm': move_up (-1*METRIC);
+		ncase 'k': move_up (1*METRIC);
+		ncase 'q': return;
+		}
+		World.precalc_for_viewer ();
+		raytrace (World, skycolor);
+		v_blitt ();
+	}
+}
+
+int main ()
+{
+#ifdef HAVE_SSE
+	printf ("SSE support\n");
+#endif
+Viewer.ctor (0,0,0);
+Ray.ctor (1,2,3);
+Viewer.add (Ray);
+Viewer.printf ("*** * %f %f %f\n");
+	initialize_graphics ();
+//	max_blitt ();
+	for (;;) {
+		testworld3_main ();
+		VIEWANGLE=0.7f;
+		testworld2_main ();
+		VIEWANGLE=0.3f;
+		testworld1_main ();
+	}
+}
+
