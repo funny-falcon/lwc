@@ -228,12 +228,13 @@ void export_output (OUTSTREAM o)
 	ms *p;
 	FILE *pstream = stdout;
 #ifdef DEBUG
-	if (debugflag.OUTPUT_INDENTED&&1)
+	if (debugflag.OUTPUT_INDENTED&&1) {
 		if (!(pstream = popen ("indent -kr -st -l90", "w"))) {
 			fprintf (stderr, "cannot find the 'indent' program."
 				" output is one big line of tokens\n");
 			pstream = stdout;
 		}
+	}
 	if (debugflag.GENERAL)
 		PRINTF ("+++++++++++++ PROGRAM +++++++++++++\n");
 #endif

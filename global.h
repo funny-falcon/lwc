@@ -76,6 +76,10 @@
 #define VERSION_MIN 0
 #define LWC_VERSION "2.0"
 
+#ifdef __SIZEOF_FLOAT128__
+#define __LWC_HAS_FLOAT128 1
+#endif
+
 #include "norm.h"
 
 extern int zinit [];
@@ -592,6 +596,9 @@ enum {
 	B_SCHAR = -32, B_UCHAR, B_SSINT, B_USINT, B_SINT, B_UINT,
 	B_SLONG, B_ULONG, B_SLLONG, B_ULLONG, B_SSIZE_T, B_USIZE_T,
         B_FLOAT, B_DOUBLE, B_LDOUBLE,
+#ifdef __LWC_HAS_FLOAT128
+        B_FLOAT128,
+#endif
 	B_VOID, B_ELLIPSIS, B_PELLIPSIS, B_PURE, INTERNAL_ARGEND /* -13 */
 };
 

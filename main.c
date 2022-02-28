@@ -145,7 +145,7 @@ static const char stddef [] =
    "typedef __WINT_TYPE__ wint_t;\n"
    "void exit (int);\n"
 #endif
-   "extern void * malloc (unsigned int);\n"
+   "extern void * malloc (size_t);\n"
 #if INTER_alloca == RESERVED_alloca
    "extern void * alloca (unsigned int);\n"
 #endif
@@ -226,7 +226,7 @@ int main (int argc, char **argv)
 	output_itoken (INCLUDE, new_symbol (strdup ("#ifndef LWC_SIZES\n")));
 	output_itoken (INCLUDE, new_symbol (strdup ("#define LWC_SIZES\n")));
 	output_itoken (INCLUDE, new_symbol (strdup ("#define usz_t __SIZE_TYPE__\n")));
-	output_itoken (INCLUDE, new_symbol (strdup ("#define ssz_t __INTPTR_TYPE__ \n")));
+	output_itoken (INCLUDE, new_symbol (strdup ("#define ssz_t __INTPTR_TYPE__\n")));
 	output_itoken (INCLUDE, new_symbol (strdup ("#endif\n")));
 #ifdef	COMMENT_OUTPUT
 	output_itoken (INCLUDE, new_symbol (COMMENT_SECTION_INCLUDE));

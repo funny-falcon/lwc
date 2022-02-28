@@ -248,6 +248,9 @@ void name_of_simple_type (Token *s, typeID t)
 	Case (B_FLOAT, RESERVED_float);
 	Case (B_DOUBLE, RESERVED_double);
 	Case (B_LDOUBLE, RESERVED_long, RESERVED_double);
+#ifdef __LWC_HAS_FLOAT128
+	Case (B_FLOAT128, RESERVED__Float128);
+#endif
 	Case (B_VOID, RESERVED_void);
 	Case (B_PURE, -1);
 #undef	Case
@@ -419,6 +422,9 @@ Token *build_type (typeID t, Token o, Token ret[])
 	ncase B_SLLONG: sintprintf (ret, RESERVED_long, RESERVED_long, -1);
 	ncase B_FLOAT:  sintprintf (ret, RESERVED_float, -1);
 	ncase B_DOUBLE: sintprintf (ret, RESERVED_double, -1);
+#ifdef __LWC_HAS_FLOAT128
+	ncase B_FLOAT128: sintprintf (ret, RESERVED__Float128, -1);
+#endif
 	ncase B_VOID:   sintprintf (ret, RESERVED_void, -1);
 	}
 

@@ -87,6 +87,9 @@ enum {
 	RESERVED_void,
 	RESERVED_char,
 	RESERVED_int,
+#ifdef __LWC_HAS_FLOAT128
+	RESERVED__Float128,
+#endif
 	RESERVED_float,
 	RESERVED_double,
 #define ISTBASETYPE(x) (x >= RESERVED_long && x <= RESERVED_double)

@@ -608,7 +608,7 @@ static inline int get_nconst ()
 static void preproc_line ()
 {
 	// # <line> "file"
-	char file [200], *p1, *p2;
+	char file [256], *p1, *p2;
 	int l;
 
 	if (skip_ws ()) return;
@@ -620,6 +620,8 @@ static void preproc_line ()
 	p2 = strchr (p1, '"');
 	l = p2 - p1;
 	Ci = p2 - Cpp;
+        if(l >= sizeof(file))
+                fatal ("line directive filename too big");
 	strncpy (file, p1, l);
 	file [l] = 0;
 	store_file (file);
@@ -829,7 +831,9 @@ void initlex ()
 
 	ENTER_SYMBOL (ssz_t);
 	ENTER_SYMBOL (usz_t);
-
+#ifdef __LWC_HAS_FLOAT128
+	ENTER_SYMBOL (_Float128);
+#endif
 	// extensive
 	ENTER_SYMBOL (__asm__);
 	ENTER_SYMBOL (__extension__);

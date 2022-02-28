@@ -13,6 +13,7 @@ void enable_debugs ()
 	logstream = stderr;
 
 #define TEST(x)	access (DEBUGDIR #x, F_OK) == 0;
+//#define TEST(x)	1;
 #define ENABLE(x) debugflag.x = TEST(x)
 #define ON(x) debugflag.x = 1;
 

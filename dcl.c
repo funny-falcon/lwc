@@ -121,6 +121,10 @@ static NormPtr bt_builtin (Dclbase *b, NormPtr p)
 	 case RESERVED_float:
 		 b->basetype = B_FLOAT;
 		 b->shortname [i++] = RESERVED_float;
+#ifdef __LWC_HAS_FLOAT128
+	 ncase RESERVED__Float128:
+		 b->basetype = B_FLOAT128;
+#endif
 	ncase RESERVED_void:
 		 b->basetype = B_VOID;
 		 b->shortname [i++] = RESERVED_void;

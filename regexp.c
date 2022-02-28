@@ -7,6 +7,9 @@ some kind of state machine is definitelly used. A parser too!
 #include <ctype.h>
 #include "global.h"
 
+#define BASE_CLASS_BUF_SIZE 258
+#define BASE_CLASS_MAX_SIZE 256
+
 static bool	regexp_case;
 static int	regexp_partition = 255;
 static bool	regexp_packed;
@@ -235,18 +238,17 @@ static int mk_class (regstr R, int *p)
 {
 	int i = 0, j1, j2, c;
 	int not = R [i++] == RE_SPECIAL_ONBRAK;
-	char base_class [258];
+	char base_class [BASE_CLASS_BUF_SIZE];
 
-	if (!not && R [i + 1] == RE_SPECIAL_CBRAK && R [i] < 256) {
+	if (!not && R [i + 1] == RE_SPECIAL_CBRAK && R [i] < BASE_CLASS_MAX_SIZE) {
 		*p = R [i];
 		return i + 2;
 	}
 
-	memset (base_class, '0', 258);
-	base_class [258] = 0;
+	memset (base_class, '0', BASE_CLASS_BUF_SIZE);
 
 	while (R [i] != RE_SPECIAL_CBRAK)
-		if (R [i] < 256) {
+		if (R [i] < BASE_CLASS_MAX_SIZE) {
 			if (R [i + 1] != RE_SPECIAL_RANGE) {
 				base_class [R [i++]] = '1';
 				continue;
@@ -260,13 +262,13 @@ static int mk_class (regstr R, int *p)
 			i += 3;
 		} else if (isuclass (R [i])) {
 			j1 = mk_uclass (R [i++]) - RE_SPECIAL_CLASS;
-			for (c = 0; c < 256; c++)
+			for (c = 0; c < BASE_CLASS_MAX_SIZE; c++)
 				if (CClass [j1][c] == '1')
 					base_class [c] = '1';
 		} else rerror ("was not expecting that in here");
 
 	if (not) 
-		for (j1 = 1; j1 < 256; j1++)
+		for (j1 = 1; j1 < BASE_CLASS_MAX_SIZE; j1++)
 			base_class [j1] = base_class [j1] == '0' ? '1' : '0';
 
 	*p = add_class (base_class);
@@ -276,8 +278,8 @@ static int mk_class (regstr R, int *p)
 static void build_ctbl ();
 static void compile_classes (regstr R)
 {
-	int i, j, R2 [256];
-	char_class tmp [256];
+	int i, j, R2 [BASE_CLASS_MAX_SIZE];
+	char_class tmp [BASE_CLASS_MAX_SIZE];
 	CClass = tmp;
 
 	for (i = 0; R [i]; i++)
@@ -304,7 +306,7 @@ static void build_ctbl ()
 
 	if (nclasses > 31) rerror ("not supported > 32 character classes");
 
-	for (i = 0; i < 258; i++)
+	for (i = 0; i < BASE_CLASS_BUF_SIZE; i++)
 		ctbl [i] = 0;
 
 	for (i = 0; i < nclasses; i++)
@@ -317,7 +319,7 @@ static int count1s (int b)
 {
 	int i, s;
 	b = 1 << b;
-	for (i = 1, s = 0; i < 256; i++)
+	for (i = 1, s = 0; i < BASE_CLASS_MAX_SIZE; i++)
 		if (ctbl [i] & b) ++s;
 	return s;
 }
