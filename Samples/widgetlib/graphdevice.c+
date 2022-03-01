@@ -1,0 +1,220 @@
+extern "stdio.h" {
+#include <stdio.h>
+}
+extern "stdlib.h" {
+#include <stdlib.h>
+}
+extern "unistd.h" {
+#include <unistd.h>
+}
+extern "string.h" {
+#include <string.h>
+}
+
+#include "graphdevice.h"
+
+//
+// X Windows initialization.
+//
+XWinDevice.XWinDevice (char *winname, int wx, int wy, char *display)
+{
+	if (!display) display = getenv ("DISPLAY");
+
+	D = XOpenDisplay (display);
+	if (!(success = D != 0))
+		return;
+
+	scrX = wx;
+	scrY = wy;
+
+	XSetWindowAttributes attr;
+	attr.backing_store = Always;
+	W = XCreateWindow (D, DefaultRootWindow (D), 0, 0, scrX, scrY, 1,
+			   CopyFromParent, CopyFromParent, CopyFromParent,
+			   CWBackingStore, &attr);
+
+	XSizeHints sh;
+	sh.min_width = sh.max_width = scrX;
+	sh.min_height = sh.max_height = scrY;
+	sh.flags = PMinSize | PMaxSize;
+
+	XSetNormalHints (D, W, &sh);
+	XMapWindow (D, W);
+	XFlush (D);
+
+	XStoreName (D, W, winname);
+
+	init_colors ();
+	init_fonts ();
+}
+
+static char *X_color_names [] = {
+	"black", "white", "yellow", "sandy brown", "dark red",
+	"blue", "dark green", "light grey", "dark grey"
+};
+
+void XWinDevice.init_colors ()
+{
+	int i;
+	XColor d, g;
+	Colormap cmap = DefaultColormap (D, DefaultScreen (D));
+
+	for (i = COLOR_BLACK; i < COLOR_NCOLORS; i++) {
+		XAllocNamedColor (D, cmap, X_color_names [i], &g, &d);
+		colorval [i] = g.pixel;
+	}
+
+	XGCValues v;
+	v.fill_style = FillSolid;
+
+	xGC = XCreateGC (D, W, GCFillStyle, &v);
+	curfg = curbg = -1;
+}
+
+static char *FontNames [] = {
+"-misc-fixed-medium-r-normal--7-70-75-75-c-50-iso8859-1",
+"8x13bold",
+"8x13"
+};
+
+void XWinDevice.init_fonts ()
+{
+	/* XXX: This does not do what it's supposed to do. Fix it */
+	unsigned int i, pt;
+	char t [100];
+	int sc = DefaultScreen (D);
+
+	pt = (72 * (int) ((double)DisplayWidthMM (D, sc) * 25.4)) / 80;
+
+	if (pt > 130) pt = 130;
+
+	for (i = 0; i < FONT_NFONTS; i++) {
+		sprintf (t, "%s", FontNames [i]);
+		if (!(fontval [i] = XLoadQueryFont (D, t))) {
+			fprintf (stderr, "Cannot load font \"%s\"\n", t);
+			exit (1);
+		}
+	}
+}
+
+XWinDevice.~XWinDevice ()
+{
+	if (D) XCloseDisplay (D);
+}
+
+//
+// utils
+//
+void XWinDevice.setfg (color_n c)
+{
+	if (curfg != c) {
+		XGCValues v;
+
+		v.foreground = colorval [c];
+		XChangeGC (D, xGC, GCForeground, &v);
+
+		curfg = c;
+	}
+}
+
+void XWinDevice.setbg (color_n c)
+{
+	if (curbg != c) {
+		XGCValues v;
+
+		v.background = colorval [c];
+		XChangeGC (D, xGC, GCBackground, &v);
+
+		curbg = c;
+	}
+}
+
+void XWinDevice.setfont (font_n f)
+{
+	XGCValues v;
+
+	v.font = fontval [f]->fid;
+	XChangeGC (D, xGC, GCFont, &v);
+}
+
+//
+// Drawing Primitives
+//
+void XWinDevice.Flush ()
+{
+	XFlush (D);
+}
+
+void XWinDevice.DrawLine (int x1, int y1, int x2, int y2, color_n c)
+{
+	setfg (c);
+	XDrawLine (D, W, xGC, x1, y1, x2, y2);
+}
+
+void XWinDevice.DrawPoint (int x, int y, color_n c)
+{
+	setfg (c);
+	XDrawPoint (D, W, xGC, x, y);
+}
+
+void XWinDevice.DrawRect (int x, int y, int w, int h, color_n c)
+{
+	setfg (c);
+	XDrawRectangle (D, W, xGC, x, y, w, h);
+}
+
+void XWinDevice.FillRect (int x, int y, int w, int h, color_n c)
+{
+	setfg (c);
+	XFillRectangle (D, W, xGC, x, y, w, h);
+}
+
+void XWinDevice.DrawText (int x, int y, char *t, font_n f, color_n fg)
+{
+	setfg (fg);
+	setfont (f);
+	XDrawString (D, W, xGC, x, y + fontval [f]->max_bounds.ascent, t, strlen (t));
+}
+
+void XWinDevice.DrawText (int x, int y, char *t, font_n f, color_n fg, color_n bg)
+{
+	setfg (fg);
+	setbg (bg);
+	setfont (f);
+	XDrawImageString (D, W, xGC, x, y + fontval [f]->max_bounds.ascent, t, strlen (t));
+}
+
+//
+// Save unders
+//
+
+struct DirtyUndies
+{
+	XImage *I;
+	int X, Y;
+	ctor (int, int, int, int);
+	dtor ();
+};
+
+DirtyUndies.ctor (Display *D, Window W, int x, int y, int w, int h)
+{
+	I = XGetImage (D, W, X = y, Y = y, w, h, AllPlanes, ZPixmap);
+}
+
+DirtyUndies.dtor ()
+{
+	XDestroyImage (I);
+}
+
+void *XWinDevice.SaveUnders (int x, int y, int w, int h)
+{
+	return (void*) new DirtyUndies (D, W, x, y, w, h);
+}
+
+void XWinDevice.RestoreUnders (void *v)
+{
+	DirtyUndies *d = (DirtyUndies*) v;
+
+	XPutImage (D, W, xGC, d->I, 0, 0, d->X, d->Y, d->I->width, d->I->height);
+	delete d;
+}

@@ -1,0 +1,483 @@
+/******************************************************************************
+
+	C/C++ lexcial analyser on preprocessed source
+
+******************************************************************************/
+
+extern "stdlib.h" {
+#include <stdlib.h>
+}
+extern "string.h" {
+#include <string.h>
+}
+extern "stdio.h" {
+#include <stdio.h>
+}
+extern "ctype.h" {
+#include <ctype.h>
+}
+extern "unistd.h" {
+#include <unistd.h>
+}
+
+#include "global.h"
+
+token CTok;
+#define clline CTok.at_line
+
+static char *Cpp;
+static int Ci, Clen;
+
+/******************************************************************************
+		Maybe this is faster than ctype.h macros
+		The first 127 ASCII characters is a universal constant.
+******************************************************************************/
+static char ll_ctypes [256];
+
+static void initctypes ()
+{
+#define SET(x,y) ll_ctypes [x] = y;
+	SET('A',2) SET('B',2) SET('C',2) SET('D',2) SET('E',2) SET('F',3) SET('G',2)
+	SET('H',2) SET('I',2) SET('J',2) SET('K',2) SET('L',3) SET('M',2) SET('N',2)
+	SET('O',2) SET('P',2) SET('Q',2) SET('R',2) SET('S',2) SET('T',2) SET('U',3)
+	SET('V',2) SET('W',2) SET('X',2) SET('Y',2) SET('Z',2)
+	SET('a',2) SET('b',2) SET('c',2) SET('d',2) SET('e',2) SET('f',3) SET('g',2)
+	SET('h',2) SET('i',2) SET('j',2) SET('k',2) SET('l',3) SET('m',2) SET('n',2)
+	SET('o',2) SET('p',2) SET('q',2) SET('r',2) SET('s',2) SET('t',2) SET('u',3)
+	SET('v',2) SET('w',2) SET('x',2) SET('y',2) SET('z',2)
+	SET('_',2)
+	SET('0',1) SET('1',1) SET('2',1) SET('3',1) SET('4',1) SET('5',1) SET('6',1)
+	SET('7',1) SET('8',1) SET('9',1)
+}
+
+#define ISNIEND(x) (ll_ctypes [(int)x] == 3)
+#define ISALPHA(x) (ll_ctypes [(int)x] >= 2)
+#define ISDIGIT(x) (ll_ctypes [(int)x] == 1)
+#define ISALNUM(x) (ll_ctypes [(int)x] != 0)
+/******************************************************************************
+		Unwindable lex exceptional error conditions
+******************************************************************************/
+
+static void lex_error (char *m)
+{
+	fprintf (stderr, "lex-error: %s\n", m);
+	exit (1);
+}
+
+/***************************************************************************
+		Start of Token Parser Routines
+***************************************************************************/
+
+static inline void skip_ws ()
+{
+	for (;;) {
+		for (;;) {
+			if (Cpp [Ci] == ' ' || Cpp [Ci] == '\t') {
+				if (++Ci >= Clen) return;
+				continue;
+			}
+			if (Cpp [Ci] == '\n') {
+				++clline;
+				if (++Ci >= Clen) return;
+				continue;
+			}
+			break;
+		}
+#if 0
+		if (Cpp [Ci] == '\\' && Cpp [Ci + 1] == '\n') {
+			Ci += 2;
+			++clline;
+			continue;
+		}
+#endif
+		break;
+	}
+}
+
+static inline void get_ident ()
+{
+	CTok.type = IDENT_DUMMY;
+	CTok.p = &Cpp [Ci];
+
+	while (ISALNUM (Cpp [Ci]))
+		if (++Ci >= Clen) break;
+
+	CTok.len = &Cpp [Ci] - CTok.p;
+}
+
+static char EOFstring [] = " string literal";
+
+static void get_string ()
+{
+	CTok.type = STRING;
+	CTok.p = &Cpp [++Ci];
+
+	for (;;) {
+		while (Cpp [Ci] != '\\' && Cpp [Ci] != '"')
+			if (++Ci >= Clen) lex_error (EOFstring);
+		if (Cpp [Ci] == '\\') {
+			Ci += 2;
+			if (Ci >= Clen) lex_error (EOFstring);
+			continue;
+		}
+		break;
+	}
+
+	CTok.len = &Cpp [Ci] - CTok.p;
+	++Ci;
+}
+
+static inline void get_exponent ()
+{
+	++Ci;
+	if (Cpp [Ci] == '-' || Cpp [Ci] == '+') Ci++;
+	while (ISDIGIT (Cpp [Ci]))
+		if (++Ci >= Clen) break;
+}
+
+static inline void get_float_frac ()
+{
+	// The token pointer and length are already set to
+	// the decimal part, or this[char] && 0 if no decimal part
+
+	++Ci;
+
+	while (ISDIGIT (Cpp [Ci]))
+		if (++Ci >= Clen) break;
+}
+
+static char EOFchar [] = "character constant";
+
+static void get_char_const ()
+{
+	++Ci;
+	CTok.type = CCONSTANT;
+	CTok.p = &Cpp [Ci];
+
+	for (;;) {
+		while (Cpp [Ci] != '\\' && Cpp [Ci] != '\'')
+			if (++Ci >= Clen) lex_error (EOFchar);
+		if (Cpp [Ci] == '\\') {
+			Ci += 2;
+			if (Ci >= Clen) lex_error (EOFchar);
+			continue;
+		}
+		break;
+	}
+
+	CTok.len = &Cpp [Ci] - CTok.p;
+	if (CTok.len > 10) lex_error (EOFchar);
+	++Ci;
+}
+
+static inline void get_nconst ()
+{
+	CTok.type = CONSTANT;
+	CTok.p = &Cpp [Ci];
+
+	while (isalnum (Cpp [Ci]))
+		if (++Ci >= Clen) break;
+
+	if (Cpp [Ci] == '.') {
+		get_float_frac ();
+		CTok.type = FCONSTANT;
+	}
+	if (Cpp [Ci] == 'e' || Cpp [Ci] == 'E' || Cpp [Ci] == 'p') {
+		get_exponent ();
+		CTok.type = FCONSTANT;
+	}
+
+	while (ISNIEND (Cpp [Ci]))
+		if (++Ci >= Clen) break;
+
+	CTok.len = &Cpp [Ci] - CTok.p;
+}
+
+/***************************************************************************
+		Little utils
+***************************************************************************/
+
+static void grle_morph ()
+{
+	char gl = Cpp [Ci];
+
+	CTok.p = &Cpp [Ci];
+	++Ci;
+
+	if (Cpp [Ci] == gl) {
+		++Ci;
+		if (Cpp [Ci] == '=') {
+			++Ci;
+			CTok.type = (gl == '>') ? ASSIGNRS : ASSIGNLS;
+		} else CTok.type = (gl == '>') ? RSH : LSH;
+	} else if (Cpp [Ci] == '=' || Cpp [Ci] == '?') {
+		++Ci;
+		CTok.type = (gl == '>') ? GEQCMP : LEQCMP;
+	} else CTok.type = gl;
+}
+
+static void anor_morph ()
+{
+	char ao = Cpp [Ci];
+
+	++Ci;
+
+	if (Cpp [Ci] == ao) {
+		++Ci;
+		CTok.type = (ao == '&') ? ANDAND : OROR;
+	} else if (Cpp [Ci] == '=') {
+		++Ci;
+		CTok.type = (ao == '&') ? ASSIGNBA : ASSIGNBO;
+	} else CTok.type = ao;
+}
+
+/***************************************************************************
+***************************************************************************/
+
+/******************************************************************************
+		Interface entry functions
+******************************************************************************/
+
+static void do_yylex ()
+{
+Again:
+	if (Ci >= Clen) {
+		CTok.type = THE_END;
+		return;
+	}
+
+	skip_ws ();
+	if (Ci >= Clen) {
+		CTok.type = THE_END;
+		return;
+	}
+
+	CTok.p = &Cpp [Ci];
+	CTok.len = 0;
+
+	if (ISDIGIT (Cpp [Ci]))
+		get_nconst ();
+	else if (ISALPHA (Cpp [Ci]) /*|| Cpp [Ci] == '_'*/)
+		if (Cpp [Ci] == 'L' && (Cpp [Ci + 1] == '\'' || Cpp [Ci + 1] == '"')) {
+			Ci++;
+			goto Switch;
+		} else
+			get_ident ();
+	else Switch: switch (Cpp [Ci]) {
+		case '(':
+		case ')':
+		case ';':
+		case ',':
+			CTok.type = Cpp [Ci];
+			CTok.p = &Cpp [Ci];
+			++Ci;
+			break;
+		case '*':
+			CTok.type = Cpp [Ci];
+			++Ci;
+			if (Cpp [Ci] == '=') {
+				CTok.type = ASSIGNM;
+				++Ci;
+				break;
+			}
+			break;
+		case '"':
+			get_string ();
+			return;
+		case '\'':
+			get_char_const ();
+			return;
+		case '/':
+			++Ci;
+			if (Cpp [Ci] == '=') {
+				CTok.type = ASSIGND;
+				++Ci;
+				break;
+			}
+			CTok.type = '/';
+			break;
+		case '.':
+			if (ISDIGIT (Cpp [Ci + 1])) {
+				get_nconst ();
+				break;
+			}
+			++Ci;
+			if (Cpp [Ci] == '.' && Cpp [Ci + 1] == '.') {
+				CTok.type = ELLIPSIS;
+				Ci += 2;
+			} else CTok.type = '.';
+			break;
+		case '-':
+			++Ci;
+			if (Cpp [Ci] == '>') {
+				++Ci;
+				CTok.type = POINTSAT;
+				break;
+			}
+			if (Cpp [Ci] == '-') {
+				CTok.type = MINUSMINUS;
+				++Ci;
+				break;
+			}
+			if (Cpp [Ci] == '=') {
+				CTok.type = ASSIGNS;
+				++Ci;
+				break;
+			}
+			CTok.type = '-';
+			break;
+		case '+':
+			++Ci;
+			if (Cpp [Ci] == '+') {
+				CTok.type = PLUSPLUS;
+				++Ci;
+				break;
+			}
+			if (Cpp [Ci] == '=') {
+				CTok.type = ASSIGNA;
+				++Ci;
+				break;
+			}
+			CTok.type = '+';
+			break;
+		case '!':
+		case '%':
+		case '^':
+			CTok.type = Cpp [Ci];
+			++Ci;
+			if (Cpp [Ci] == '=') {
+				CTok.type = (CTok.type == '!') ? NEQCMP :
+					(CTok.type == '%') ? ASSIGNR : ASSIGNBX;
+				++Ci;
+				break;
+			}
+			break;
+		case '&':
+		case '|':
+			anor_morph ();
+			break;
+		case ':':
+			++Ci;
+			CTok.type = ':';
+			break;
+		case '=':
+			++Ci;
+			if (Cpp [Ci] == '=') {
+				CTok.type = EQCMP;
+				++Ci;
+				break;
+			}
+			CTok.type = '=';
+			break;
+		case '>':
+		case '<':
+			grle_morph ();
+			break;
+		case '#':
+			CTok.type = '#';
+			if (Ci == 0 || Cpp [Ci - 1] == '\n'
+			|| Cpp [Ci - 1] == '\r')
+				CTok.type = CPP_DIRECTIVE;
+			++Ci;
+			if (Ci < Clen && Cpp [Ci] == '#') {
+				CTok.type = CPP_CONCAT;
+				++Ci;
+			}
+			break;
+		case '[':
+		case ']':
+		case '~':
+			CTok.type = Cpp [Ci];
+			CTok.p = &Cpp [Ci];
+			++Ci;
+			break;
+		case '\r':
+		case '\f':
+			++Ci;
+			goto Again;
+		default:
+			// $
+			CTok.type = Cpp [Ci];
+			CTok.p = &Cpp [Ci];
+			++Ci;
+	}
+
+	CTok.len = &Cpp [Ci] - CTok.p;
+}
+
+static void enter_abspath_file (char *file)
+{
+	char tmp [1024];
+	if (!abs_paths || file [0] == '/') enter_file_indicator (file);
+	else enter_file_indicator (strcat (strcpy (tmp, cwd), file));
+
+}
+
+static void skip_pp_line ()
+{
+	// For preprocessed source, the only directive is:
+	// # <line> "file"
+	// send the file to enter_file_indicator ()
+	// ... but it can also be pragma (thing)
+	char tmp [512];
+	tmp [0] = 0;
+
+	if (Cpp [++Ci] == 'p') { // #pragma
+		while (Ci < Clen && Cpp [Ci] != '\n')
+			++Ci;
+		++Ci;
+		return;
+	}
+
+	// Assume, without verification, that the next token is
+	// a line number.
+
+	clline = strtol (&Cpp [Ci], NULL, 10 );
+
+	for(;;) {
+		if (Ci >= Clen) {
+	        	CTok.type = THE_END;
+	        	return;
+		}
+
+		switch (Cpp [Ci]) {
+		case '\n':
+			if (tmp [0])
+				enter_abspath_file (tmp);
+			++Ci;		/* Scott */
+			return;
+		case '"':
+			get_string ();
+			strncpy (tmp, CTok.p, CTok.len);
+			tmp [CTok.len] = 0;
+			break;
+		default:
+	        	++Ci;
+		}
+	}
+}
+
+/******************************************************************************
+		Main
+******************************************************************************/
+
+void yynorm (char *c, int l)
+{
+	initctypes ();
+	Cpp = c;
+	Clen = l;
+	clline = 1;
+	Ci = 0;
+
+	for (;;) {
+		do_yylex ();
+
+		if (CTok.type == THE_END) break;
+		if (CTok.type == CPP_DIRECTIVE)
+			skip_pp_line (); else
+
+		enter_token ();
+	}
+
+	fprintf (stderr, "%i lines\n", clline);
+}

@@ -3,10 +3,12 @@
 #
 
 # enable ncc
+include config.mak
 
 CCC = ncc -ncld -ncfabs -ncgcc -Wall -g -Wno-parentheses
 CCC = ncc -ncld -ncfabs -ncgcc -Wall -O2 -Wno-parentheses
-CCC = gcc -Wall -std=gnu89 -g -Wno-parentheses
+CCC = $(GCC) -Wall -g -Wno-parentheses -O2 -DBASECC='"$(GCC)"'
+CCC = $(GCC) -Wall -g -DBASECC='"$(GCC)"'
 
 CC = $(CCC) -c
 

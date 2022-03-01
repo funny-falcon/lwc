@@ -1,0 +1,17 @@
+#include "mem_pool.h"
+#include <stdlib.h>
+
+
+//earray_template_implementation (earray_cf, cfile_i)
+//earray_template_implementation (earray_types, type)
+//earray_template_implementation (earray_typeID, typeID*)
+//earray_template_implementation (earray_cfunc, cfunc)
+//earray_template_implementation (earray_fptrassign, fptrassign)
+//mem_pool_template_implementation (mem_pool_cl, clines_i)
+//mem_pool_template_implementation (mem_pool_int, int)
+//mem_pool_template_implementation (mem_pool_char, signed char)
+//mem_pool_template_implementation (mem_pool_short, signed short int)
+//mem_pool_template_implementation (mem_pool_long, signed long int)
+//mem_pool_template_implementation (mem_pool_ulong, unsigned long int)
+//mem_pool_template_implementation (mem_pool_float, double)
+//mem_pool_template_implementation (mem_pool_region, region)

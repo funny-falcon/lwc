@@ -1,0 +1,31 @@
+
+	extern "stdio.h" {
+	#include <stdio.h>
+	}
+
+	FILE* operator, (FILE *f, int i)
+	{
+		fprintf (f, "%i", i);
+		return f;
+	}
+
+	FILE* operator, (FILE *f, void *p)
+	{
+		fprintf (f, "%p", p);
+		return f;
+	}
+
+	FILE *operator, (FILE *f, char *s)
+	{
+		fprintf (f, "%s", s);
+		return f;
+	}
+
+	int main ()
+	{
+		int i = 3;
+		char *p = "text";
+
+
+		stdout, "The values are: ", i, " and ", (void*)p, " [", p, "]\n";
+	}

@@ -1,0 +1,1372 @@
+/*****************************************************************************
+
+	compiler of C expressions to bytecode
+
+*****************************************************************************/
+#include <alloca.h>
+#include <stdio.h>
+#include <assert.h>
+
+#include "global.h"
+
+static subexpr *ee;
+
+int last_result;
+/******************************************************************************
+
+
+
+
+
+******************************************************************************/
+
+int *assembly;
+int ap;
+
+# define TSI	's'
+# define TUI	'u'
+# define TFP	'f'
+# define TPTR	'p'
+# define TREC	'r'
+# define TBF	'b'
+#define CONVI	'}'
+#define CONVF	'\\'
+#define EST	'$'
+#define ENI	'N'
+#define ENP	'P'
+#define EIN	'I'
+#define ENF	'F'
+#define ESMB	'S'
+#define ENL	'A'
+#define JMP	'J'	// escape to JMP[TFA]
+# define JMPT	't'
+# define JMPF	'f'
+# define JMPA	'a'
+#define LABEL	'L'
+#define TEST	'T'
+#define CALL	'C'
+#define COPYREC	'Q'
+#define RESULT	'R'
+#define NOOP	' '
+#define EEND	'\n'
+						// ZNPIFSAJLTCQR
+
+#define PASM1(x1) assembly[ap++] = x1
+#define PASM2(x1,x2) PASM1 (x1); PASM1 (x2)
+#define PASM3(x1,x2,x3) PASM2 (x1,x2); PASM1 (x3)
+#define PASM4(x1,x2,x3,x4) PASM3 (x1,x2,x3); PASM1 (x4)
+#define PASM5(x1,x2,x3,x4,x5) PASM3 (x1,x2,x3); PASM2 (x4,x5)
+#define PASM6(x1,x2,x3,x4,x5,x6) PASM3 (x1,x2,x3); PASM3 (x4,x5,x6)
+#define ENDASM PASM1 (EEND)
+
+static int LP, SP;
+class ccsub
+{
+	void fconv ();
+	void iconv ();
+inline	int  sub_ptri (ccsub, ccsub);
+inline	void settype (int);
+inline	void lvaluate ();
+inline	void copytype (ccsub);
+inline	void lvcopy (ccsub);
+inline	int  putthis (int*);
+inline	void putthis (int);
+inline	void degrade (ccsub);
+inline	void arithmetic_convert (ccsub, ccsub);
+inline	void ptr_compare (ccsub, ccsub);
+inline	bool integral ();
+inline	bool arithmetic ();
+inline	bool structure ();
+inline	bool constant ();
+inline	void assign_convert (ccsub, bool = false);
+inline	void argtype (typeID);
+	bool op1return;
+	void cc_binwconv (exprID, ccsub, ccsub);
+	void cc_addptr (ccsub, ccsub);
+	int  ptrfix (ccsub);
+	bool lv;
+
+	void cc_fcall (exprID);
+	void cc_prefix (exprID);
+	void cc_postfix (exprID);
+	void cc_tival (exprID);
+	void cc_tfval (exprID);
+	void cc_tsval (exprID);
+	void cc_tlval (exprID);
+	void cc_terminal (exprID);
+	void cc_sizeof (exprID);
+	void cc_dot (exprID);
+	void cc_array (exprID);
+	void cc_star (exprID);
+	void cc_addrof (exprID);
+	void cc_ecast (exprID);
+	void cc_usign (exprID);
+	void cc_nbool (exprID);
+	void cc_compl (exprID);
+	void cc_add (exprID);
+	void cc_sub (exprID);
+	void cc_muldiv (exprID);
+	void cc_bintg (exprID, int);
+	void cc_cmp (exprID, int);
+	void cc_bool (exprID);
+	void cc_conditional (exprID);
+	void cc_assign (exprID);
+	void cc_assign (ccsub, ccsub);
+	void cc_oassign (exprID);
+	void cc_compound_result (exprID);
+
+   public:
+	ccsub (exprID);
+	ccsub () {}
+	ccsub (typeID, bool);
+
+	int  base, spec [MSPEC];
+	int  pobj, obj;
+
+inline	void putthis ();
+};
+
+static ccsub op1;
+
+void ccsub.cc_tival (exprID e)
+{
+	settype (S_INT);
+	pobj = ENI;
+	obj = e;
+}
+
+void ccsub.cc_tfval (exprID e)
+{
+	settype (FLOAT);
+	pobj = ENF;
+	obj = e;
+}
+
+void ccsub.cc_tsval (exprID e)
+{
+	base = S_CHAR;
+	spec [0] = '*';
+	spec [1] = -1;
+	pobj = ENP;
+	obj = e;
+}
+
+void ccsub.cc_tlval (exprID e)
+{
+	base = VOID;
+	spec [0] = '*';
+	spec [1] = -1;
+	pobj = ENL;
+	obj = e;
+}
+
+//###################################
+// sizeof expression
+//###################################
+void ccsub.cc_sizeof (exprID e)
+{
+	int sap = ap;
+	ccsub o (ee [e].voici.e);
+	ap = sap;
+	settype (S_INT);
+	pobj = ENI;
+	ee [e].action = VALUE;
+	ee [e].voici.value = sizeof_type (o.base, o.spec);
+	obj = e;
+}
+
+//###################################
+// terminal symbol
+//###################################
+void ccsub.cc_terminal (exprID ei)
+{
+	subexpr e = ee [ei];
+	lookup_object ll (e.voici.symbol);
+	if (ll.enumconst) {
+		settype (S_INT);
+		pobj = ENI;
+		ee [ei].voici.value = ll.ec;
+		ee [ei].action = VALUE;
+		cc_tival (ei);
+	} else {
+		base = ll.base;
+		intcpy (spec, ll.spec);
+		pobj = ESMB;
+		lvaluate ();
+	}
+	obj = ei;
+}
+
+//###################################
+// address operator &
+//###################################
+void ccsub.cc_addrof (exprID ei)
+{
+	ccsub o (ee [ei].voici.e);
+
+	pobj = o.pobj;
+	obj = o.obj;
+	base = o.base;
+	if (o.lv || o.structure ()) {
+		spec [0] = '*';
+		intcpy (&spec [1], o.spec);
+	} else if (o.spec [0] != -1)
+		intcpy (spec, o.spec);
+	else half_error ("&address_of not addressable");
+}
+
+//###################################
+// pointer indirection *
+//###################################
+void ccsub.cc_star (exprID e)
+{
+	ccsub o (ee [e].voici.e);
+
+	if (o.lv) {
+		putthis (SP++);
+		PASM1 ('=');
+		o.putthis ();
+		PASM1 (EEND);
+	} else {
+		pobj = o.pobj;
+		obj = o.obj;
+	}
+
+	degrade (o);
+	lvaluate ();
+}
+
+//###################################
+// array reference []
+//###################################
+void ccsub.cc_array (exprID ei)
+{
+	ccsub o1 (ee [ei].voici.e), o2 (ee [ei].e);
+	cc_addptr (o1, o2);
+	degrade (*this);
+	lvaluate ();
+}
+
+//###################################
+// structure reference .
+//###################################
+void ccsub.cc_dot (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub o (e.voici.e);
+
+	if (!o.structure ()) half_error ("member of no structure");
+
+	lookup_member lm (e.voila.member, o.base);
+	base = lm.base;
+	intcpy (spec, lm.spec);
+
+	putthis (SP++);
+	PASM4 ('=', EIN, lm.displacement, '+');
+	o.putthis ();
+	ENDASM;
+
+	lvaluate ();
+}
+
+//###################################
+// cast (type-name)
+//###################################
+void ccsub.cc_ecast (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub o (e.voici.e), pseudo (e.voila.cast, true);
+	o.assign_convert (pseudo, true);
+	copytype (o);
+	*this = o;
+}
+
+//###################################
+// unary +/-
+//###################################
+void ccsub.cc_usign (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub o (e.voici.e);
+
+	if (!o.arithmetic ()) half_error ("sign on pointer");
+
+	copytype (o);
+	if (e.action == UPLUS) lvcopy (o);
+	else if (o.pobj == ENI) {
+		pobj = ENI;
+		ee [ei].voici.value = -ee [o.obj].voici.value;
+		ee [ei].action = VALUE;
+		obj = ei;
+	} else if (o.pobj == ENF) {
+		pobj = ENF;
+		ee [ei].action = FVALUE;
+		ee [ei].voici.fvalue = -ee [o.obj].voici.fvalue;
+		obj = ei;
+	} else {
+		putthis (SP++);
+		PASM2 ('=', '-');
+		o.putthis ();
+		ENDASM;
+	}
+}
+
+//###################################
+// logical negation !
+//###################################
+void ccsub.cc_nbool (exprID ei)
+{
+	ccsub o (ee [ei].voici.e);
+	if (o.pobj == ENI || o.pobj == ENF) {
+		pobj = ENI;
+		ee [obj = ei].voici.value = !ee [o.obj].voici.value;
+		ee [ei].action = VALUE;
+	} else {
+		putthis (SP++);
+		PASM2 ('=', '!');
+		o.putthis ();
+		ENDASM;
+	}
+	settype (S_INT);
+}
+
+//###################################
+// one's complement ~
+//###################################
+void ccsub.cc_compl (exprID ei)
+{
+	ccsub o (ee [ei].voici.e);
+	if (!o.integral ()) half_error ("~integral");
+	if (o.pobj == ENI) {
+		pobj = ENI;
+		ee [obj = ei].voici.value = ~ee [o.obj].voici.value;
+		ee [ei].action = VALUE;
+	} else {
+		putthis (SP++);
+		PASM2 ('=', '~');
+		o.putthis ();
+		ENDASM;
+	}
+	settype (S_INT);
+}
+
+//###################################
+// binary operators with integral
+// operands <<%&|^>>
+//###################################
+void ccsub.cc_bintg (exprID ei, int op)
+{
+	subexpr e = ee [ei];
+	ccsub o1 (e.voici.e), o2 (e.e);
+
+	if (op1return) op1 = o1;
+	if (!o1.integral () || !o2.integral ())
+		half_error ("<<, %, &, |, ^, >> need intergal operands");
+
+	if (o1.pobj == ENI && o2.pobj == ENI) {
+		int v = 0, v1 = ee [o1.obj].voici.value;
+		int v2 = ee [o2.obj].voici.value;
+		pobj = ENI;
+		switch (e.action) {
+			case REM:	v = v1 % v2;  break;
+			case SHR:	v = v1 >> v2; break;
+			case SHL:	v = v1 << v2; break;
+			case BOR:	v = v1 | v2;  break;
+			case BAND:	v = v1 & v2;  break;
+			case BXOR:	v = v1 ^ v2;  break;
+		}
+		ee [obj = ei].voici.value = v;
+		ee [ei].action = VALUE;
+	} else {
+		putthis (SP++);
+		PASM1 ('=');
+		o1.putthis ();
+		PASM1 (op);
+		o2.putthis ();
+		ENDASM;
+	}
+
+	settype (S_INT);
+}
+
+//###################################
+// multiply divide * /
+//###################################
+void ccsub.cc_muldiv (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub o1 (e.voici.e), o2 (e.e);
+	if (op1return) op1 = o1;
+	if (!o1.arithmetic () || !o2.arithmetic ())
+		half_error ("*,/ need arithmetic operands");
+	cc_binwconv (ei, o1, o2);
+}
+
+//###################################
+// prefix ++ --
+//###################################
+void ccsub.cc_prefix (exprID ei)
+{
+	int pi = 1;
+	subexpr e = ee [ei];
+	ccsub o (e.voici.e);
+
+	if (!o.lv) half_error ("(++/--) no-lvalue");
+	if (o.arithmetic ()) {
+		if (!o.integral ()) half_error ("++float");
+	} else pi = ptr_increment (o.base, o.spec);
+	o.putthis ();
+	PASM1 ('=');
+	o.putthis ();
+	PASM4 (e.action == PPPRE ? '+' : '-', EIN, pi, EEND);
+	copytype (o);
+	lvcopy (o);
+}
+
+//###################################
+// postfix ++ --
+//###################################
+void ccsub.cc_postfix (exprID ei)
+{
+	int pi = 1;
+	subexpr e = ee [ei];
+	ccsub o (e.voici.e);
+
+	if (!o.lv) half_error ("no-lvalue (++/--)");
+	if (o.arithmetic ()) {
+		if (!o.integral ()) half_error ("--float");
+	} else pi = ptr_increment (o.base, o.spec);
+	copytype (o);
+	putthis (SP++);
+	PASM1 ('=');
+	o.putthis ();
+	ENDASM;
+	o.putthis ();
+	PASM1 ('=');
+	o.putthis ();
+	PASM4 (e.action == PPPOST ? '+' : '-', EIN, pi, EEND);
+}
+
+//###################################
+// addition +
+//###################################
+void ccsub.cc_add (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub o1 (e.voici.e), o2 (e.e);
+
+	if (op1return) op1 = o1;
+	if (o1.arithmetic () && o2.arithmetic ())
+		cc_binwconv (ei, o1, o2);
+	else    cc_addptr (o1, o2);
+}
+
+//###################################
+// subtract -
+//###################################
+void ccsub.cc_sub (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub o1 (e.voici.e), o2 (e.e);
+
+	if (op1return) op1 = o1;
+
+	if (o1.arithmetic () && o2.arithmetic ()) {
+		cc_binwconv (ei, o1, o2);
+		return;
+	}
+
+	if (!o1.arithmetic () && !o2.arithmetic ()) {
+		// (p1 - p2) / sizeof (*p1)
+		int pi = sub_ptri (o1, o2), tobj;
+		PASM3 (EST, tobj = SP++, '=');
+		o1.putthis ();
+		PASM1 ('-');
+		o2.putthis ();
+		ENDASM;
+		putthis (SP++);
+		PASM6 ('=', EST, tobj, '/', EIN, pi);
+		ENDASM;
+		settype (S_INT);
+	} else if (o2.integral ()) {
+		// p - sizeof (*p) * v
+		o2.ptrfix (o1);
+		copytype (o1);
+		putthis (SP++);
+		PASM1 ('=');
+		o1.putthis ();
+		PASM1 ('-');
+		o2.putthis ();
+		ENDASM;
+	} else if (o1.arithmetic ()) half_error ("integer - pointer");
+	else half_error ("pointer - shit");
+}
+
+//###################################
+// compare == != < <= >= >
+//###################################
+void ccsub.cc_cmp (exprID ei, int op)
+{
+	subexpr e = ee [ei];
+	ccsub o1 (e.voici.e), o2 (e.e);
+
+	if (o1.arithmetic () && o1.arithmetic ())
+		arithmetic_convert (o1, o2);
+	else ptr_compare (o1, o2);
+
+	if (o1.pobj == ENI && o2.pobj == ENI) {
+		int v = 0, v1 = ee [o1.obj].voici.value;
+		int v2 = ee [o2.obj].voici.value;
+		pobj = ENI;
+		switch (e.action) {
+		case BEQ: v = v1 == v2; break; case BNEQ: v = v1 != v2; break;
+		case CGR: v = v1 > v2; break; case CGRE: v = v1 >= v2; break;
+		case CLE: v = v1 < v2; break; case CLEE: v = v1 <= v2; break;
+		}
+		ee [obj = ei].voici.value = v;
+		ee [ei].action = VALUE;
+	} else {
+		putthis (SP++);
+		PASM1 ('=');
+		o1.putthis ();
+		PASM1 (op);
+		o2.putthis ();
+		ENDASM;
+	}
+
+	settype (S_INT);
+}
+
+//###################################
+// early termination && ||
+//###################################
+void ccsub.cc_bool (exprID ei)
+{
+	subexpr e = ee [ei];
+	int jlabel, oror = e.action == IOR;
+
+	ccsub o1 (e.voici.e);
+	if (o1.pobj == ENI) {
+		int v = ee [o1.obj].voici.value;
+		if (oror ? v != 0 : v == 0) {
+			ee [ei].action = VALUE;
+			ee [ei].voici.value = (oror) ? 1 : 0;
+			pobj = ENI;
+			obj = ei;
+		} else {
+			ccsub o2 (e.e);
+			if (o2.pobj == ENI) {
+			ee [ei].action = VALUE;
+				ee [ei].voici.value =
+					ee [o2.obj].voici.value != 0;
+				pobj = ENI;
+				obj = ei;
+			} else {
+				putthis (SP++);
+				PASM4 ('=', EIN, 1, EEND);
+				PASM1 (TEST);
+				o2.putthis ();
+				PASM4 (EEND, JMP, JMPT, LP);
+				putthis ();
+				PASM4 ('=', EIN, 0, EEND);
+				PASM2 (LABEL, LP++);
+			}
+		}
+	} else {
+		putthis (SP++);
+		PASM4 ('=', EIN, oror ? 0 : 1, EEND);
+		PASM1 (TEST);
+		o1.putthis ();
+		PASM4 (EEND, JMP, oror ? JMPT : JMPF, jlabel = LP++);
+
+		ccsub o2 (e.e);
+		PASM1 (TEST);
+		o2.putthis ();
+		PASM4 (EEND, JMP, oror ? JMPF : JMPT, LP);
+
+		PASM2 (LABEL, jlabel);
+		putthis ();
+		PASM4 ('=', EIN, oror ? 1 : 0, EEND);
+		PASM2 (LABEL, LP++);
+	}
+
+	settype (S_INT);
+}
+
+//###################################
+// conditional ? :
+//###################################
+void ccsub.cc_conditional (exprID ei)
+{
+	subexpr e = ee [ei];
+	int jlabel1, jlabel2;
+	bool o1float, o2float;
+	ccsub o (e.voici.e);
+
+	if (o.pobj == ENI) {
+		if (ee [o.obj].voici.value)
+			if (e.e == -1)
+				*this = o;
+			else {
+				ccsub o1 (e.e);
+				*this = o1;
+			}
+		else {
+			ccsub o1 (e.voila.eelse);
+			*this = o1;
+		}
+		return;
+	}
+	PASM1 (TEST);
+	o.putthis ();
+	PASM4 (EEND, JMP, JMPF, jlabel1 = LP++);
+
+	ccsub o1 (e.e), *ufo = e.e == -1 ? &o : &o1;
+		o1float = ufo->arithmetic () && ufo->base == FLOAT;
+		putthis (SP++);
+		PASM1 ('=');
+		ufo->putthis ();
+		PASM4 (EEND, JMP, JMPA, jlabel2 = LP++);
+		PASM2 (LABEL, jlabel1);
+	ccsub o2 (e.voila.eelse);
+		o2float = o2.arithmetic () && o2.base == FLOAT;
+	if ((o1float || o2float) && o1float != o2float)
+//if (o1float || o2float && o1float != o2float)
+		if (o1float) {	// ? float : int
+			o2.fconv ();
+			putthis ();
+			PASM1 ('=');
+			o2.putthis ();
+			PASM3 (EEND, LABEL, jlabel2);
+			settype (FLOAT);
+		} else {	// ? int : float
+			putthis (SP++);
+			PASM1 ('=');
+			o2.putthis ();
+			PASM6 (EEND, JMP, JMPA, LP, LABEL, jlabel2);
+			ufo->fconv ();
+			putthis ();
+			PASM1 ('=');
+			ufo->putthis ();
+			PASM3 (EEND, LABEL, LP++);
+			settype (FLOAT);
+		}
+	else {
+		putthis ();
+		PASM1 ('=');
+		o2.putthis ();
+		PASM3 (EEND, LABEL, jlabel2);
+		if (ufo->arithmetic ()) copytype (o2);
+		else copytype (*ufo);
+	}
+}
+
+//###################################
+// assignment =
+//###################################
+void ccsub.cc_assign (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub o1 (e.voici.e), o2 (e.e);
+	cc_assign (o1, o2);
+}
+
+void ccsub.cc_assign (ccsub o1, ccsub o2)
+{
+	o2.assign_convert (o1);
+
+	if (o1.lv) {
+		o1.putthis ();
+		PASM1 ('=');
+		o2.putthis ();
+		ENDASM;
+	} else {
+		if (!o1.structure ())
+			half_error ("not lvalue in assignment");
+		if (o1.base != o2.base)
+			half_error ("incompatible");
+		PASM2 (COPYREC, o1.base);
+		o1.putthis ();
+		o2.putthis ();
+		ENDASM;
+	}
+	copytype (o1);
+	obj = o2.obj;
+	pobj = o2.pobj;
+}
+
+//###################################
+// op assignment += -= *= /= ...
+//###################################
+void ccsub.cc_oassign (exprID ei)
+{
+	op1return = true;
+	switch (ee [ei].action) {
+		case ASSIGNA:	ee [ei].action = ADD; cc_add (ei); break;
+		case ASSIGNS:	ee [ei].action = SUB; cc_sub (ei); break;
+		case ASSIGNM:	ee [ei].action = MUL; cc_muldiv (ei); break;
+		case ASSIGND:	ee [ei].action = DIV; cc_muldiv (ei); break;
+		case ASSIGNR:	cc_bintg (ei, '%'); break;
+		case ASSIGNBA:	cc_bintg (ei, '&'); break;
+		case ASSIGNBX:	cc_bintg (ei, '^'); break;
+		case ASSIGNBO:	cc_bintg (ei, '|'); break;
+		case ASSIGNRS:	cc_bintg (ei, RSH); break;
+		case ASSIGNLS:	cc_bintg (ei, LSH); break;
+	}
+	cc_assign (op1, *this);
+}
+
+//###################################
+// function call ()
+//###################################
+void ccsub.cc_fcall (exprID ei)
+{
+	int argcc [100], aap = 0, i;
+	typeID *tp;
+	subexpr e = ee [ei];
+
+	if (ee [e.voici.e].action == SYMBOL) {
+		lookup_function lf (ee [e.voici.e].voici.symbol);
+		base = lf.base;
+		intcpy (spec, lf.spec + 2);
+		tp = ret_arglist (lf.spec [1]);
+		argcc [aap++] = ESMB;
+		argcc [aap++] = e.voici.e;
+	} else {
+		ccsub fn (ee [ei].voici.e);
+		base = fn.base;
+		if (fn.spec [0] != '(') {
+			if (fn.spec [0] != '*' || fn.spec [1] != '(')
+				half_error ("not a function");
+			intcpy (spec, fn.spec + 3);
+			tp = ret_arglist (fn.spec [2]);
+		} else {
+			intcpy (spec, fn.spec + 2);
+			tp = ret_arglist (fn.spec [1]);
+		}
+		aap += fn.putthis (argcc + aap);
+	}
+
+	argcc [aap++] = '(';
+	if ((ei = ee [ei].e) != -1) {
+		for (; ee [ei].action == ARGCOMMA; ei = ee [ei].e) {
+			ccsub o (ee [ei].voici.e);
+			aap += o.putthis (argcc + aap);
+			if (*tp == -1) half_error ("too many arguments");
+			if (*tp > 0) o.argtype (*tp++);
+		}
+		ccsub o (ei);
+		aap += o.putthis (argcc + aap);
+		if (*tp == -1) half_error ("too many arguments");
+		if (*tp > 0) o.argtype (*tp++);
+	}
+	if (*tp > 0) half_error ("too few arguments");
+	argcc [aap++] = ')';
+
+	putthis (SP++);
+	PASM2 ('=', CALL);
+	for (i = 0; i < aap; i++)
+		PASM1 (argcc [i]);
+	ENDASM;
+}
+
+//###################################
+// result of the last subexpression
+// of a compound statement in expression
+// (a horrible violation)
+//###################################
+void ccsub.cc_compound_result (exprID ei)
+{
+	type t;
+	opentype (ee [ei].voila.result_type, t);
+	base = t.base;
+	intcpy (spec, t.spec);
+	pobj = RESULT;
+	obj = ee [ei].voici.using_result;
+}
+
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+void ccsub.cc_binwconv (exprID ei, ccsub o1, ccsub o2)
+{
+	if (!o2.arithmetic () || !o1.arithmetic ())
+		half_error ("Need arithmetic operands");
+	arithmetic_convert (o1, o2);
+
+	if (o1.pobj == ENI && o2.pobj == ENI) {
+		int v = 0, v1 = ee [o1.obj].voici.value;
+		int v2 = ee [o2.obj].voici.value;
+		pobj = ENI;
+		switch (ee [ei].action) {
+		case ADD:	v = v1 + v2; break;
+		case SUB:	v = v1 - v2; break;
+		case MUL:	v = v1 * v2; break;
+		case DIV:	if (v2 == 0) {
+					if (include_values && !usage_only)
+					fprintf (stderr, "Divizion by zero"
+					" in arithmetic\n");
+					v = v1;
+				} else v = v1 / v2; break;
+		}
+		ee [obj = ei].voici.value = v;
+		ee [ei].action = VALUE;
+	} else if ((o1.pobj == ENF && (o2.pobj == ENF || o2.pobj == ENI))
+		// (((((((( moronic gcc warnings make ugly programs )))))))
+	       || (o2.pobj == ENF && o1.pobj == ENI)) {
+		float v = 0;
+		float v1 = (o1.pobj == ENF) ? ee [o1.obj].voici.fvalue
+				: (float) ee [o1.obj].voici.value;
+		float v2 = (o2.pobj == ENF) ? ee [o2.obj].voici.fvalue
+				: (float) ee [o2.obj].voici.value;
+		pobj = ENF;
+		switch (ee [ei].action) {
+			case ADD:	v = v1 + v2; break;
+			case SUB:	v = v1 - v2; break;
+			case MUL:	v = v1 * v2; break;
+			case DIV:	v = v1 / v2; break;
+		}
+		ee [obj = ei].voici.fvalue = v;
+		ee [ei].action = FVALUE;
+	} else {
+		putthis (SP++);
+		PASM1 ('=');
+		o1.putthis ();
+		switch (ee [ei].action) {
+		case ADD: PASM1 ('+'); break; case SUB: PASM1 ('-'); break;
+		case MUL: PASM1 ('*'); break; case DIV: PASM1 ('/'); break;
+		}
+		o2.putthis ();
+		ENDASM;
+	}
+
+	settype (o1.base);
+}
+
+void ccsub.cc_addptr (ccsub o1, ccsub o2)
+{
+	bool b1 = o1.arithmetic (), b2 = o2.arithmetic ();
+	
+	if (b1 && b2) half_error ("No pointer operand");
+	if (!b1 && !b2) half_error ("pointer + pointer");
+
+	if (b2) {
+		o2.ptrfix (o1);
+		copytype (o1);
+	} else {
+		o1.ptrfix (o2);
+		copytype (o2);
+	}
+
+	putthis (SP++);
+	PASM1 ('=');
+	o1.putthis ();
+	PASM1 ('+');
+	o2.putthis ();
+	PASM1 (EEND);
+}
+
+void ccsub.copytype (ccsub o)
+{
+	base = o.base;
+	intcpy (spec, o.spec);
+}
+
+void ccsub.degrade (ccsub o)
+{
+	base = o.base;
+	if (o.spec [0] == -1 || o.spec [0] == '(')
+		half_error ("* not effective");
+
+	intcpy (spec, o.spec + (o.spec [0] == '*' ? 1 : 2));
+}
+
+int ccsub.ptrfix (ccsub o)
+{
+	int pi = ptr_increment (o.base, o.spec);
+
+	if (!integral ()) half_error ("pointer + float");
+	if (pobj == ENI) {
+		pobj = EIN;
+		obj = pi * ee [obj].voici.value;
+	} else {
+		PASM6 (EST, SP, '=', EIN, pi, '*');
+		putthis ();
+		PASM1 (EEND);
+		pobj = EST;
+		obj = SP++;
+		lv = false;
+	}
+	return pi;
+}
+
+int ccsub.sub_ptri (ccsub o1, ccsub o2)
+{
+	int i = ptr_increment (o1.base, o1.spec);
+	if (ptr_increment (o2.base, o2.spec) != i) 
+		half_error ("'-' on different pointers");
+	return i;
+}
+
+int ccsub.putthis (int *p)
+{
+	int *sa = assembly;
+	int sap = ap, r;
+	assembly = p;
+	ap = 0;
+	putthis ();
+	assembly = sa;
+	r = ap;
+	ap = sap;
+	return r;
+}
+
+void ccsub.putthis ()
+{
+	if (lv) {
+		PASM1 ('*');
+		if (spec [0] == '*') {
+			PASM1 (TPTR);
+		} else if (base >= 0) {
+			PASM2 (TREC, base);
+		} else switch (base) {
+		case S_CHAR:	PASM2 (TSI, 1); break;
+		case U_CHAR:	PASM2 (TUI, 1); break;
+		case S_SINT:	PASM2 (TSI, 2); break;
+		case U_SINT:	PASM2 (TUI, 2); break;
+		case S_LINT:	PASM2 (TSI, 4); break;
+		case U_LINT:	PASM2 (TUI, 4); break;
+		case S_INT :	PASM2 (TSI, 4); break;
+		case U_INT :	PASM2 (TUI, 4); break;
+		case S_LONG:	PASM2 (TSI, 8); break;
+		case U_LONG:	PASM2 (TUI, 8); break;
+		case FLOAT :	PASM1 (TFP); break;
+		default:	PASM2 (TBF, base); break;
+		}
+	}
+	PASM2 (pobj, obj);
+}
+
+void ccsub.putthis (int nobj)
+{
+	PASM2 (pobj, obj = nobj);
+}
+
+void ccsub.lvcopy (ccsub o)
+{
+	if (o.lv) {
+		PASM3 (EST, obj = SP++, '=');
+		o.putthis ();
+		PASM1 (EEND);
+	} else {
+		obj = o.obj;
+		pobj = o.pobj;
+	}
+}
+
+bool ccsub.structure ()
+{
+	return spec [0] == -1 && base >= 0;
+}
+
+bool ccsub.arithmetic ()
+{
+	return (spec [0] == -1 && base < VOID) || spec [0] == ':';
+}
+
+bool ccsub.integral ()
+{
+	// moronic gcc warnings
+	return (spec [0] == -1 && base < FLOAT) || spec [0] == ':';
+}
+
+bool ccsub.constant ()
+{
+	return pobj == ENI || pobj == ENF;
+}
+
+void ccsub.lvaluate ()
+{
+	lv = !(spec [0] =='[' || (spec [0] ==-1 && base >=0) || spec [0] =='(');
+}
+
+void ccsub.settype (int b)
+{
+	base = b;
+	spec [0] = -1;
+}
+
+void ccsub.assign_convert (ccsub o, bool casted)
+{
+	if (o.arithmetic ()) {
+		if (o.base != FLOAT) {
+			if (arithmetic ()) {
+				if (base == FLOAT) iconv ();
+			}
+		} else {
+			if (arithmetic ()) {
+				if (base != FLOAT) fconv ();
+			} else half_error ("ptr to float conv");
+		}
+	} else if (o.spec [0] == -1) {
+		if (!casted)
+		if (spec [0] != -1 || o.base != base)
+			half_error ("incompatible types");
+	} else {
+		if (arithmetic ()) {
+			if (base == FLOAT) half_error ("make ptr from float");
+			//else if (!casted)  warning...
+		}
+	}
+	base = o.base;
+	intcpy (spec, o.spec);
+}
+
+void ccsub.argtype (typeID i)
+{
+	ccsub pseudo (i, true);
+	assign_convert (pseudo, false);
+}
+
+void ccsub.ptr_compare (ccsub o1, ccsub o2)
+{
+	if ((o1.arithmetic () && !o1.integral ())
+	// ((((( fuck those gcc warnings ))))
+	||  (o2.arithmetic () && !o2.integral ()))
+		half_error ("compare pointer w/ float, duh???");
+}
+
+void ccsub.arithmetic_convert (ccsub o1, ccsub o2)
+{
+	if (o1.base == FLOAT || o2.base == FLOAT) {
+		if (o1.base != o2.base)
+			if (o1.base == FLOAT) o2.fconv ();
+			else o1.fconv ();
+else ; // gcc developer responsible for this is a moron
+	}
+}
+
+void ccsub.fconv ()
+{
+	if (pobj == ENI) {
+		ee [obj].voici.fvalue = (double) ee [obj].voici.value;
+		pobj = ENF;
+	} else {
+		PASM4 (EST, SP, '=', CONVF);
+		putthis ();
+		ENDASM;
+		pobj = EST;
+		obj = SP++;
+		lv = false;
+	}
+	settype (FLOAT);
+}
+
+void ccsub.iconv ()
+{
+	if (pobj == ENF) {
+		ee [obj].voici.value = (int) ee [obj].voici.fvalue;
+		pobj = ENI;
+	} else {
+		PASM4 (EST, SP, '=', CONVI);
+		putthis ();
+		PASM1 (EEND);
+		pobj = EST;
+		obj = SP++;
+		lv = false;
+	}
+	settype (S_INT);
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+ccsub.ccsub (exprID ei)
+{
+	if (ei == -1) return;
+advance:;
+	subexpr e = ee [ei];
+
+	pobj = EST;
+	lv = false;
+	op1return = false;
+	switch (e.action) {
+		case VALUE:
+		case UVALUE:	cc_tival (ei);		break;
+		case FVALUE:	cc_tfval (ei);		break;
+		case SVALUE:	cc_tsval (ei);		break;
+		case AVALUE:	cc_tlval (ei);		break;
+		case SYMBOL:	cc_terminal (ei);	break;
+		case PPPOST:
+		case MMPOST:	cc_postfix (ei);	break;
+		case FCALL:	cc_fcall (ei);		break;
+		case MEMB:	cc_dot (ei);		break;
+		case ARRAY:	cc_array (ei);		break;
+		case ADDROF:	cc_addrof (ei);		break;
+		case PTRIND:	cc_star (ei);		break;
+		case PPPRE:
+		case MMPRE:	cc_prefix (ei);		break;
+		case CAST:	cc_ecast (ei);		break;
+		case LNEG:	cc_nbool (ei);		break;
+		case OCPL:	cc_compl (ei);		break;
+		case UPLUS:
+		case UMINUS:	cc_usign (ei);		break;
+		case SIZEOF:	cc_sizeof (ei);		break;
+		case MUL:
+		case DIV:	cc_muldiv (ei);		break;
+		case ADD:	cc_add (ei);		break;
+		case SUB:	cc_sub (ei);		break;
+		case REM:	cc_bintg (ei, '%');	break;
+		case SHR:	cc_bintg (ei, RSH);	break;
+		case SHL:	cc_bintg (ei, LSH);	break;
+		case BOR:	cc_bintg (ei, '|');	break;
+		case BAND:	cc_bintg (ei, '&');	break;
+		case BXOR:	cc_bintg (ei, '^');	break;
+		case IAND:
+		case IOR:	cc_bool (ei);		break;
+		case BEQ:	cc_cmp (ei, EQCMP);	break;
+		case BNEQ:	cc_cmp (ei, NEQCMP);	break;
+		case CGR:	cc_cmp (ei, '>');	break;
+		case CGRE:	cc_cmp (ei, GEQCMP);	break;
+		case CLE:	cc_cmp (ei, '<');	break;
+		case CLEE:	cc_cmp (ei, LEQCMP);	break;
+		case COND:	cc_conditional (ei);	break;
+		case COMPOUND_RESULT: cc_compound_result (ei); break;
+		case COMMA: {
+			ccsub o (e.voici.e);
+			ei = e.e; (void) o.lv;
+			goto advance;
+		}
+		default: if (e.action == '=') cc_assign (ei);
+			 else cc_oassign (ei);
+	}
+}
+
+ccsub.ccsub (typeID ti, bool ppp)
+{
+	type t;
+	opentype (ti, t);
+	base = t.base;
+	intcpy (spec, t.spec);
+}
+
+/* ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ 
+	now we can implement typeof expression
+ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ ++ */
+
+typeID typeof_expression ()
+{
+	if (CExpr.first == -1) syntax_error (ExpressionPtr, "this has no type");
+	typeID ret = 0;
+	SP = LP = 0;
+	ap = 0;
+	assembly = (int*) alloca (17 * CExpr.ne * sizeof (int) + 4);
+	ee = CExpr.ee;
+//	try {
+		ccsub CC (CExpr.first);
+		type t;
+		t.base = CC.base;
+		t.spec = CC.spec;
+		ret = gettype (t) + TYPEDEF_BASE;
+//	} catch (EXPR_ERROR) {
+//		syntax_error (ExpressionPtr, "expression trivial for typeof()");
+//	}
+	return ret;
+}
+
+/******************************************************************************
+
+	(note to self: attempt not to reorder commands unless sure)
+
+******************************************************************************/
+//
+// this here, is a mini parser of the bytecode assembly object code
+// to readable bytecode assembly, for now the only interesting thing
+// is to show the generated bytecode readably. In the future, we may
+// just dump the assembly tokens to an object file, so this here will
+// be gone
+//
+
+static inline bool opstart (int o)
+{
+	return o=='*'||o==EST||o==EIN||o==ENI||
+		o==ENF||o==ESMB||o==ENP||o==ENL || o==RESULT;
+}
+
+int putoperand (int i)
+{
+	if (assembly [i] == '*') {
+		++i;
+		if (assembly [i] == TFP || assembly [i] == TPTR) {
+			printf (" *{%c}", assembly [i]);
+		} else {
+			printf (" *{%c%i}", assembly [i], assembly [i+1]);
+			i++;
+		}
+		i++;
+	}
+	switch (assembly [i++]) {
+	case EST:	printf ("$%i ", assembly [i]); break;
+	case EIN:	printf ("%i ", assembly [i]); break;
+	case ENI:	printf ("%li ", ee [assembly [i]].voici.value); break;
+	case ENF:	printf ("%f ", ee [assembly [i]].voici.fvalue);break;
+	case ENP:	printf ("\"%s\" ",
+			 C_Strings [ee [assembly [i]].voici.value]);break;
+	case ESMB:	printf ("%s ", expand (ee [assembly [i]].voici.symbol));
+			break;
+	case ENL:	printf (".label %s ",
+				 expand (ee [assembly [i]].voici.symbol));
+			break;
+	case RESULT:	printf (".result_%i ", assembly [i]); break;
+	}
+	return i + 1;
+}
+
+void putthis ()
+{
+	int *i;
+	for (i = assembly; *i!= -1;) {
+		if (*i == EEND) {
+			printf ("\n");
+			i++;
+			continue;
+		}
+		if (*i == NOOP) {
+			i++;
+			continue;
+		}
+		if (*i == LABEL) {
+			printf ("L%i:\t", *++i);
+			i++;
+		} else printf ("\t");
+		if (*i == TEST) {
+			printf ("test ");
+			i = assembly + putoperand (i - assembly + 1);
+			continue;
+		}
+		if (*i == JMP) {
+			switch (*++i) {
+			case JMPT: printf ("jmpt "); break;
+			case JMPF: printf ("jmpf "); break;
+			case JMPA: printf ("jmp "); break;
+			}
+			printf ("L%i\n", *++i);
+			i++;
+			continue;
+		}
+		if (*i == RESULT) {
+			printf (".result_%i ", *++i);
+			i = assembly + putoperand (i - assembly + 1);
+			continue;
+		}
+		if (*i == COPYREC) {
+			printf (".copyrec %i: ", *++i);
+			i = assembly + putoperand (i - assembly + 1);
+			i = assembly + putoperand (i - assembly);
+			continue;
+		}
+		i = assembly + putoperand (i - assembly);
+		if (*i != '=') continue;
+		printf (" = ");
+		i++;
+		if (*i == CALL) {
+			printf (".call ");
+			i = assembly + putoperand (i - assembly + 1) + 1;
+			printf ("(");
+			while (*i != ')')
+				i = assembly + putoperand (i - assembly);
+			printf (")");
+			i++;
+			continue;
+		}
+		if (!opstart (*i)) {
+			if (*i == CONVI) printf ("\\int ");
+			else if (*i == CONVF) printf ("\\float ");
+			else printf (" %s ", expand (*i));
+			i++;
+		}
+		i = assembly + putoperand (i - assembly);
+		if (*i == EEND) continue;
+		printf (" %s ", expand (*i));
+		i = assembly + putoperand (i - assembly + 1);
+	}
+	printf ("\n");
+}
+
+/* --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- ---
+	ok, we did that. Tomorrow we must go see the persons in
+	charge. They want to speak to us
+ --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- --- */
+
+void compile (exprID e)
+{
+	SP = LP = 0;
+	ap = 1;
+	assembly [0] = EEND;
+	ccsub CC (e);
+
+#ifdef GNU_VIOLATIONS
+	last_result_type.base = CC.base;
+	intcpy (last_result_type.spec, CC.spec);
+#endif
+	PASM2 (RESULT, ++last_result);
+
+	CC.putthis ();
+	assembly [ap++] = EEND;
+	assembly [ap++] = -1;
+	assembly [ap++] = -1;
+	putthis ();
+}
+
+//
+//
+//
+//
+
+void ncci_cc.cc_expression ()
+{
+	assembly = (int*) alloca (17 * CExpr.ne * sizeof (int) + 4);
+	ee = CExpr.ee;
+//	try {
+		if (CExpr.first != -1) compile (CExpr.first);
+//	} catch (EXPR_ERROR) { }
+}
+
+int cc_int_expression ()
+{
+	int r = 112;
+	assembly = (int*) alloca (17 * CExpr.ne * sizeof (int) + 4);
+	ee = CExpr.ee;
+//	try {
+		SP = LP = 0;
+		ap = 1;
+		assembly [0] = EEND;
+		ccsub CC (CExpr.first);
+#ifndef FAKE_VARIABLE_ARRAYS
+		if (CC.pobj != ENI)
+			half_error ("couldn't compute constant integer expr");
+#endif
+		r = ee [CC.obj].voici.value;
+//	} catch (EXPR_ERROR) {
+//		syntax_error (ExpressionPtr, "Expression Trivial to continue");
+//	}
+	return r;
+}
+
+void ncci_cc.new_function (Symbol s)
+{
+	printf ("#########################################################\n");
+	printf ("# Function %s\n", expand (s));
+	printf ("#########################################################\n");
+}
+
+void ncci_cc.inline_assembly (NormPtr p, int n)
+{
+	printf ("#inline assembly\n");
+	while (n--) printf ("%s ", expand (CODE [p++]));
+	printf ("\n\n");
+}
+
+void set_compilation ()
+{
+	ncc = new ncci_cc;
+}

@@ -1,0 +1,98 @@
+/******************************************************************************
+	dbstree.C
+
+	Dynamic Binary Search Tree used throughout the entire project.
+
+	A dbsNode applied as a parent class to a specific class will provide
+	transparent storage in a dbstree. As a result no duplicates may be
+	stored and locating stored data is performed in less than 32 steps.
+
+	Check dbstree.tex for technical information on this tree.
+
+*****************************************************************************/
+
+#include <stdio.h>
+#include <assert.h>
+#include <string.h>
+#include <stddef.h>
+
+#ifdef __GNUC__		// ------- gcc near 3.2 ------
+#define COMPILER "gcc"
+#define INTERN_memcpy RESERVED___builtin_memcpy
+#define INTERN_alloca RESERVED___builtin_alloca
+#define INTERN_strncmp RESERVED___builtin_strncmp
+#define INTERN_strncasecmp RESERVED_strncasecmp
+#define CASE_RANGERS
+#define HAVE_GNUC_LOCAL_LABELS
+#define HAVE_GNUC_ATTR_NORETURN
+#ifdef alloca
+#undef alloca
+#endif
+#define alloca __builtin_alloca
+#else			// ------ generic ------
+#include <alloca.h>
+#define COMPILER "generic"
+#define INTERN_memcpy RESERVED_memcpy
+#define INTERN_alloca RESERVED_alloca
+#define INTERN_strncmp RESERVED_strncmp
+#define INTERN_strncasecmp RESERVED_strncasecmp
+#undef HAVE_GNUC_LOCAL_LABELS
+#undef HAVE_GNUC_ATTR_NORETURN
+#endif
+
+#include "dbstree.h"
+
+//***************************************************************
+// A tree of case sensitive strings -- char *Name
+//***************************************************************
+
+static char *dbsNodeStrQuery;
+
+int dbsNodeStr.compare (dbsNodeStr *n)
+{
+	return strcmp (Name, n->Name);
+}
+
+int dbsNodeStr.compare ()
+{
+	return strcmp (Name, dbsNodeStrQuery);
+}
+
+dbsNodeStr.dbsNodeStr ()
+{
+	Name = dbsNodeStrQuery;
+}
+
+dbsNodeStr.~dbsNodeStr ()
+{
+	if (less) delete less;
+//	printf ("Deleting %s", Name);
+	if (more) delete more;
+}
+
+//***************************************************************
+// Instantiate implementation of dbsTreeStr
+//***************************************************************
+
+dbsTreeTemplate_implementation (dbsNodeStr, dbsTreeStr, 18)
+
+//***************************************************************
+// testing
+//***************************************************************
+
+int main ()
+{
+	char inword [100];
+	dbsTreeStr wtree;
+
+	while (fgets (inword, 100, stdin)) {
+		dbsNodeStrQuery = inword;
+		if (!wtree.dbsFind ()) {
+			dbsNodeStrQuery = strdup (inword);
+			wtree.addself (new dbsNodeStr);
+		}
+	}
+	printf ("ok. %i entries inserted in the dbstree\n", wtree.nnodes);
+	delete wtree.root;
+	return 0;
+}

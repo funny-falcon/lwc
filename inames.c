@@ -26,6 +26,7 @@
 #define TYPEID_POST	"TyPeId"
 #define ARRDTOR_POST	"aRrDtOr"
 #define OBJCTOR		"ObJFiLe_ctor"
+#define INITF_POST	"InItObJ"
 
 #define NAME_TRUNCATED	"_TrNC"
 
@@ -110,7 +111,7 @@ static	intnode *mfn;
 	int bdi = c + 10000 * n;
 	intnode *N;
 
-	if (N = intfind (mfn, bdi))
+	if ((N = intfind (mfn, bdi)))
 		return N->v.i;
 
 	char tmp [512];
@@ -182,7 +183,7 @@ Token name_inherited (Token p)
 static	intnode *mfn;
 	intnode *N;
 
-	if (N = intfind (mfn, p))
+	if ((N = intfind (mfn, p)))
 		return N->v.i;
 
 	char tmp [512];
@@ -283,7 +284,7 @@ Token name_arrdtor (recID r)
 Token name_virtual_inner (recID r, recID r2, Token f, typeID t)
 {
 	char ts [256];
-	char tmp [128];
+	char tmp [512];
 
 	type_string (ts, t);
 	sprintf (tmp, "%s%s_%s%s_"VIRTFUNC_POST, expand (name_of_struct (r)),
@@ -316,6 +317,13 @@ Token name_intern_ctor (recID r)
 {
 	char tmp [512];
 	sprintf (tmp, "%s_"INCTOR_POST, expand (name_of_struct (r)));
+	return new_symbol (strdup (name_not_too_long (tmp)));
+}
+
+Token name_init_func (recID r)
+{
+	char tmp [512];
+	sprintf (tmp, "%s_"INITF_POST, expand (name_of_struct (r)));
 	return new_symbol (strdup (name_not_too_long (tmp)));
 }
 

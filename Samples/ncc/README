@@ -1,0 +1,16 @@
+
+This is the ncc source code analyser from 
+
+	http://freshmeat.net/projects/ncc
+
+quickly ported to lwc. The original is in C++.
+
+It works. The speed is *exactly* the same as the C++ version
+and the executable is bigger (?).  Is it the long names?
+It is smaller if both are stripped.
+
+Except from the speed/size comparisons this can
+be an ultimate test case for many things.
+
+
+At least now ncc can analyse itself. See code.map

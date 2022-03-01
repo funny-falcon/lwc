@@ -1,0 +1,646 @@
+/*****************************************************************************
+$	C-flow and data usage analysis.
+$
+$	Stripped-down version of ccexpr. expressions are compiled but
+$	without producing bytecode assembly. just inform about
+$	function calls, use of global variables and use of members
+$	of structures
+*****************************************************************************/
+_lwc_config_ {
+	lwcdebug PARSE_ERRORS_SEGFAULT;
+};
+
+extern "stdio.h" {
+#include <stdio.h>
+}
+extern "assert.h" {
+#include <assert.h>
+}
+extern "stdlib.h" {
+#include <stdlib.h>
+}
+
+#include "global.h"
+#include "inttree.h"
+
+static intTree printed;
+static intTree printed_function;
+
+static subexpr *ee;// = &CExpr.ee;
+
+//***********************************************************
+// Output Formats & Text
+//***********************************************************
+
+static inline char *txt_func () {
+	return "\nD: %s()\n";
+}
+static inline char *txt_fcall () {
+	return "F: %s()\n";
+}
+static inline char *txt_fptr () {
+	return "\nD: *%s()\n";
+}
+static inline char *txt_fcbptr () {
+	return "\nD: *%s.%s()\n";
+}
+static inline char *txt_virt () {
+	return "F: (*virtual)()\n";
+}
+static inline char *txt_gvar () {
+	return "G: %s\n";
+}
+static inline char *txt_evar () {
+	return "G: %s\n";
+}
+static inline char *txt_memb () {
+	return "S: %s.%s\n";
+}
+static inline char *txt_fpcall () {
+	return "F: *%s()\n";
+}
+static inline char *txt_fcallback () {
+	return "F: *%s.%s()\n";
+}
+
+//********************************************
+
+char *structname (Symbol s)
+{
+	return s == -1 ? (char*) "{anonymous}" : C_Syms [SYMBOLID (s)];
+}
+
+void report (Symbol s, int frame)
+{
+	if (INGLOBAL) return;
+	if (!multiple)					{
+		if (printed.intFind (frame * 100000 + s)) return;
+		else new intNode (&printed);
+}
+
+	if (frame == -1 ) printf (txt_evar (), C_Syms [SYMBOLID (s)]);
+	else if (frame == 0) printf (txt_gvar (), C_Syms [SYMBOLID (s)]);
+	else printf (txt_memb (),  structname (struct_by_name (frame)), C_Syms [SYMBOLID (s)]);
+}
+
+
+void newfunction (Symbol s)
+{
+	printf (txt_func (), C_Syms [SYMBOLID (s)]);
+	if (printed.root) {
+		delete printed.root;
+		printed.root = NULL;
+	}
+	if (printed_function.root) {
+		delete printed_function.root;
+		printed_function.root = NULL;
+	}
+}
+
+void report_call (Symbol s, bool pointer)
+{
+	if (!multiple)							{
+		if (printed_function.intFind (s)) return;
+		else new intNode (&printed_function);
+}
+	printf (pointer ? txt_fpcall () : txt_fcall (), C_Syms [SYMBOLID (s)]);
+}
+
+void report_callback (Symbol rec, Symbol s)
+{
+	printf (txt_fcallback (), structname (rec), C_Syms [SYMBOLID (s)]);
+}
+
+
+static specialize earray { typedef fptrassign X; } fptr_assignments;
+
+void functionptr (Symbol s1, Symbol s2, bool pointer, Symbol m1, Symbol m2)
+{
+	int i;
+	for (i = 0; i < fptr_assignments.nr; i++) {
+		fptrassign fp = fptr_assignments.x [i];
+		if (fp.s1 == s1 && fp.s2 == s2
+		&& fp.m1 == m1 && fp.m2 == m2) return;
+	}
+	fptr_assignments.x [i = fptr_assignments.alloc ()].s1 = s1;
+	fptr_assignments.x [i].s2 = s2;
+	fptr_assignments.x [i].m1 = m1;
+	fptr_assignments.x [i].m2 = m2;
+	fptr_assignments.x [i].sptr = pointer;
+}
+
+void report_fptrs ()
+{
+	int i;
+	for (i = 0; i < fptr_assignments.nr; i++) {
+		fptrassign fp = fptr_assignments.x [i];
+		if (fp.m1 == -1) printf (txt_fptr (), C_Syms [SYMBOLID (fp.s1)]);
+		else printf (txt_fcbptr (), structname (fp.s1), C_Syms [SYMBOLID (fp.m1)]);
+		if (fp.m2 == -1) printf (fp.sptr ? txt_fpcall () : txt_fcall (), C_Syms [SYMBOLID (fp.s2)]);
+		else printf (txt_fcallback (), structname (fp.s2), C_Syms [SYMBOLID (fp.m2)]);
+	}
+}
+
+void report_virtual ()
+{
+	printf (txt_virt ());
+}
+
+class ccsub_small
+{
+inline	void fconv ();
+inline	void iconv ();
+inline	void settype (int);
+inline	void lvaluate ();
+inline	void copytype (ccsub_small);
+inline	void degrade (ccsub_small);
+inline	void arithmetic_convert (ccsub_small, ccsub_small);
+inline	bool arithmetic ();
+inline	bool structure ();
+inline	void assign_convert (ccsub_small);
+	bool op1return;
+inline	void cc_binwconv (ccsub_small, ccsub_small);
+inline	void cc_addptr (ccsub_small, ccsub_small);
+	bool lv;
+	void cc_fcall (exprID);
+	void cc_prepostfix (exprID);
+inline	void cc_terminal (exprID);
+inline	void cc_dot (exprID);
+inline	void cc_array (exprID);
+inline	void cc_star (exprID);
+inline	void cc_addrof (exprID);
+inline	void cc_ecast (exprID);
+inline	void cc_usign (exprID);
+inline	void cc_nbool (exprID);
+inline	void cc_compl (exprID);
+inline	void cc_add (exprID);
+	void cc_sub (exprID);
+	void cc_muldiv (exprID);
+	void cc_bintg (exprID);
+inline	void cc_cmp (exprID);
+	void cc_bool (exprID);
+	void cc_conditional (exprID);
+	void cc_assign (exprID);
+	void cc_oassign (exprID);
+inline	void cc_compound (exprID);
+   public:
+inline	ccsub_small (exprID);
+	ccsub_small () {}
+	ccsub_small (typeID, bool);
+
+	int base, spec [MSPEC];
+};
+
+ccsub_small op1;
+
+void ccsub_small.cc_terminal (exprID ei)
+{
+	subexpr e = ee [ei];
+	lookup_object ll (e.voici.symbol);
+	if (ll.enumconst) {
+		settype (S_INT);
+		return;
+	}
+	base = ll.base;
+	intcpy (spec, ll.spec);
+	if (ll.FRAME <= 0)
+	report (e.voici.symbol, ll.FRAME);
+	lvaluate ();
+}
+
+void ccsub_small.cc_addrof (exprID ei)
+{
+	ccsub_small o (ee [ei].voici.e);
+
+	base = o.base;
+	if (o.lv || o.structure ()) {
+		spec [0] = '*';
+		intcpy (&spec [1], o.spec);
+	} else if (o.spec [0] != -1)
+		intcpy (spec, o.spec);
+	else half_error ("&address_of not addressable");
+}
+
+void ccsub_small.cc_star (exprID e)
+{
+	ccsub_small o (ee [e].voici.e);
+	degrade (o);
+	lvaluate ();
+}
+
+void ccsub_small.cc_array (exprID ei)
+{
+	ccsub_small o1 (ee [ei].voici.e), o2 (ee [ei].e);
+	cc_addptr (o1, o2);
+	degrade (*this);
+	lvaluate ();
+}
+
+void ccsub_small.cc_dot (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o (e.voici.e);
+	lookup_member lm (e.voila.member, o.base);
+	base = lm.base;
+	intcpy (spec, lm.spec);
+	report (e.voila.member, o.base);
+	lvaluate ();
+}
+
+void ccsub_small.cc_ecast (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o (e.voici.e), pseudo (e.voila.cast, true);
+	o.assign_convert (pseudo);
+	copytype (o);
+	*this = o;
+}
+
+void ccsub_small.cc_usign (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o (e.voici.e);
+	copytype (o);
+}
+
+void ccsub_small.cc_nbool (exprID ei)
+{
+	ccsub_small o (ee [ei].voici.e);
+	(void) o;
+	settype (S_INT);
+}
+
+void ccsub_small.cc_compl (exprID ei)
+{
+	ccsub_small o (ee [ei].voici.e);
+	(void) o;
+	settype (S_INT);
+}
+
+void ccsub_small.cc_bintg (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o1 (e.voici.e), o2 (e.e);
+	(void) o2;
+	if (op1return) op1 = o1;
+	settype (S_INT);
+}
+
+void ccsub_small.cc_muldiv (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o1 (e.voici.e), o2 (e.e);
+	if (op1return) op1 = o1;
+	cc_binwconv (o1, o2);
+}
+
+void ccsub_small.cc_prepostfix (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o (e.voici.e);
+	copytype (o);
+}
+
+void ccsub_small.cc_add (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o1 (e.voici.e), o2 (e.e);
+
+	if (op1return) op1 = o1;
+	if (o1.arithmetic () && o2.arithmetic ())
+		cc_binwconv (o1, o2);
+	else    cc_addptr (o1, o2);
+}
+
+void ccsub_small.cc_sub (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o1 (e.voici.e), o2 (e.e);
+
+	if (op1return) op1 = o1;
+
+	if (o1.arithmetic () && o2.arithmetic ()) {
+		cc_binwconv (o1, o2);
+		return;
+	}
+
+	if (!o1.arithmetic () && !o2.arithmetic ()) settype (S_INT);
+	else copytype (o1);
+}
+
+void ccsub_small.cc_cmp (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o1 (e.voici.e), o2 (e.e);
+
+	if (o1.arithmetic () && o1.arithmetic ())
+		arithmetic_convert (o1, o2);
+	settype (S_INT);
+}
+
+void ccsub_small.cc_bool (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o1 (e.voici.e);
+	ccsub_small o2 (e.e);
+	(void) o1;
+	(void) o2;
+	settype (S_INT);
+}
+
+void ccsub_small.cc_conditional (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o (e.voici.e);
+	ccsub_small o1 (e.e);
+	ccsub_small o2 (e.voila.eelse);
+	ccsub_small *po = e.e==-1 ? &o : &o1;
+	(void) o1;
+	(void) o2;
+	(void) o;
+	if (po->arithmetic ()) copytype (o2);
+	else copytype (*po);
+}
+
+static void callbacks (exprID e1, exprID e2)
+{
+	Symbol s1, s2, m1 = -1, m2 = -1;
+	bool ptrs = false;
+
+	if (ee [e1].action == SYMBOL) {
+		s1 = ee [e1].voici.symbol;
+	} else if (ee [e1].action == MEMB) {
+		ccsub_small os (ee [e1].voici.e);
+		s1 = struct_by_name (os.base);
+		m1 = ee [e1].voila.member;
+	} else return;
+
+	if (ee [e2].action == SYMBOL) {
+		s2 = ee [e2].voici.symbol;
+		ptrs = !have_function (s2);
+	} else if (ee [e2].action == MEMB) {
+		ccsub_small os (ee [e2].voici.e);
+		s2 = struct_by_name (os.base);
+		m2 = ee [e2].voila.member;
+	} else return;
+
+	functionptr (s1, s2, ptrs, m1, m2);
+}
+
+void ccsub_small.cc_assign (exprID ei)
+{
+	subexpr e = ee [ei];
+	ccsub_small o1 (e.voici.e), o2 (e.e);
+
+	if (o1.spec[0] == '*' && o1.spec [1] == '(')
+		callbacks (e.voici.e, e.e);
+
+	(void) o2.lv;
+	copytype (o1);
+}
+
+void ccsub_small.cc_oassign (exprID ei)
+{
+	op1return = true;
+	switch (ee [ei].action) {
+		case ASSIGNA:	cc_add (ei); break;
+		case ASSIGNS:	cc_sub (ei); break;
+		case ASSIGNM:
+		case ASSIGND:	cc_muldiv (ei); break;
+		case ASSIGNBA: case ASSIGNBX: case ASSIGNBO:
+		case ASSIGNRS: case ASSIGNLS:
+		case ASSIGNR:	cc_bintg (ei); break;
+	}
+	copytype (op1);
+}
+
+void ccsub_small.cc_fcall (exprID ei)
+{
+	int i = 2;
+	subexpr e = ee [ei];
+	subexpr fe = ee [e.voici.e];
+
+	if (fe.action == SYMBOL) {
+		lookup_function lf (fe.voici.symbol);
+		report_call (fe.voici.symbol, lf.fptr);
+		base = lf.base;
+		intcpy (spec, lf.spec + 2);
+	} else {
+		ccsub_small fn (e.voici.e);
+
+		if (fn.spec [0] != '(') {
+			if (fn.spec [0] == '*' && fn.spec [1] == '(')
+				i = 3;
+			else half_error ("not a function");
+		}
+		base = fn.base;
+		intcpy (spec, fn.spec + i);
+
+		if (fe.action == MEMB) {
+			ccsub_small os (fe.voici.e);
+			report_callback (struct_by_name (os.base), fe.voila.member);
+		} else report_virtual ();
+	}
+
+	if ((ei = e.e) != -1) {
+		for (; ee [ei].action == ARGCOMMA; ei = ee [ei].e) {
+			ccsub_small o (ee [ei].voici.e);
+			o.lv = o.lv;
+		}
+		ccsub_small o (ei);
+		o.lv = o.lv;
+	}
+}
+
+void ccsub_small.cc_compound (exprID ei)
+{
+	base = base_of (ee [ei].voila.result_type);
+	intcpy (spec, spec_of (ee [ei].voila.result_type));
+}
+
+////////////////////////////////////////////////////////////////////////////
+
+void ccsub_small.cc_binwconv (ccsub_small o1, ccsub_small o2)
+{
+	arithmetic_convert (o1, o2);
+	settype (o1.base);
+}
+
+void ccsub_small.cc_addptr (ccsub_small o1, ccsub_small o2)
+{
+	bool b2 = o2.arithmetic ();
+	if (b2) {
+		o2.lv = false;
+		copytype (o1);
+	} else {
+		o1.lv = false;
+		copytype (o2);
+	}
+}
+
+void ccsub_small.copytype (ccsub_small o)
+{
+	base = o.base;
+	intcpy (spec, o.spec);
+}
+
+void ccsub_small.degrade (ccsub_small o)
+{
+	base = o.base;
+	if (o.spec [0] == -1) half_error ("Not a pointer");
+	intcpy (spec, o.spec + (o.spec [0] == '*' ? 1 : 2));
+}
+
+bool ccsub_small.structure ()
+{
+	return spec [0] == -1 && base >= 0;
+}
+
+bool ccsub_small.arithmetic ()
+{
+	return (spec [0] == -1 && base < VOID) || spec [0] == ':';
+}
+
+void ccsub_small.lvaluate ()
+{
+	lv = !(spec [0] =='[' || (spec [0] ==-1 && base >=0) || spec [0] =='(');
+}
+
+void ccsub_small.settype (int b)
+{
+	base = b;
+	spec [0] = -1;
+}
+
+void ccsub_small.assign_convert (ccsub_small o)
+{
+	if (o.arithmetic ())
+		if (o.base != FLOAT) iconv ();
+		else fconv ();
+else;
+	base = o.base;
+	intcpy (spec, o.spec);
+}
+
+void ccsub_small.arithmetic_convert (ccsub_small o1, ccsub_small o2)
+{
+	if (o1.base == FLOAT || o2.base == FLOAT) {
+		if (o1.base != o2.base)
+			if (o1.base == FLOAT) o2.fconv ();
+			else o1.fconv ();
+else;
+	}
+}
+
+void ccsub_small.fconv ()
+{
+	settype (FLOAT);
+}
+
+void ccsub_small.iconv ()
+{
+	settype (S_INT);
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+ccsub_small.ccsub_small (exprID ei)
+{
+	if (ei == -1) return;
+advance:;
+	subexpr e = ee [ei];
+
+	lv = false;
+	op1return = false;
+	switch (e.action) {
+		case VALUE:
+		case UVALUE:	settype (S_INT);	break;
+		case FVALUE:	settype (FLOAT);	break;
+		case SVALUE:	base = S_CHAR; spec [0] = '*'; spec [1] = -1;
+				break;
+		case AVALUE:	base = VOID; spec [0] = '*'; spec [1] = -1;
+				break;
+		case SYMBOL:	cc_terminal (ei);	break;
+		case FCALL:	cc_fcall (ei);		break;
+		case MEMB:	cc_dot (ei);		break;
+		case ARRAY:	cc_array (ei);		break;
+		case ADDROF:	cc_addrof (ei);		break;
+		case PTRIND:	cc_star (ei);		break;
+		case MMPOST: case PPPOST:
+		case PPPRE:
+		case MMPRE:	cc_prepostfix (ei);	break;
+		case CAST:	cc_ecast (ei);		break;
+		case LNEG:	cc_nbool (ei);		break;
+		case OCPL:	cc_compl (ei);		break;
+		case UPLUS:
+		case UMINUS:	cc_usign (ei);		break;
+		case SIZEOF:	settype (S_INT);	break;
+		case MUL:
+		case DIV:	cc_muldiv (ei);		break;
+		case ADD:	cc_add (ei);		break;
+		case SUB:	cc_sub (ei);		break;
+		case SHR: case SHL: case BOR: case BAND: case BXOR:
+		case REM:	cc_bintg (ei);	break;
+		case IAND:
+		case IOR:	cc_bool (ei);		break;
+		case BNEQ: case CGR: case CGRE: case CLE: case CLEE:
+		case BEQ:	cc_cmp (ei);	break;
+		case COND:	cc_conditional (ei);	break;
+		case COMPOUND_RESULT:	cc_compound (ei); break;
+		case COMMA: {
+			ccsub_small o (e.voici.e);
+			ei = e.e;
+			(void) o;
+			goto advance;
+		}
+		default:
+			if (e.action == '=') cc_assign (ei);
+			else cc_oassign (ei);
+	}
+}
+
+
+ccsub_small.ccsub_small (typeID t, bool bbb)
+{
+	base = base_of (t);
+	intcpy (spec, spec_of (t));
+}
+
+//
+//
+//
+//
+
+void ncci_usage.cc_expression ()
+{
+	if (CExpr.first != -1)  {
+		ee = CExpr.ee;
+		ccsub_small CC (CExpr.first);
+#ifdef GNU_VIOLATIONS
+		last_result_type.base = CC.base;
+		intcpy (last_result_type.spec, CC.spec);
+#endif
+	}
+	last_result++;
+}
+
+void ncci_usage.new_function (Symbol s)
+{
+	newfunction (s);
+}
+
+void ncci_usage.inline_assembly (NormPtr p, int n)
+{
+// hoping that inline assembly won't use global variables,
+// nor call functions, it is ignored (for now at least)
+}
+
+void ncci_usage.finir ()
+{
+	report_fptrs ();
+}
+
+void set_usage_report ()
+{
+	ncc = new ncci_usage;
+}

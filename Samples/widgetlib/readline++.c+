@@ -1,0 +1,175 @@
+extern "stdio.h" {
+#include <stdio.h>
+}
+extern "stdlib.h" {
+#include <stdlib.h>
+}
+extern "string.h" {
+#include <string.h>
+}
+
+#include "readline++.h"
+
+#define LCHUNK 32
+
+line_struct.line_struct ()
+{
+	linelen = cursor = 0;
+	text = (char*) malloc (allocd = LCHUNK);
+	text [0] = 0;
+}
+
+void line_struct.add_char (char c)
+{
+	int i;
+
+	if (allocd == linelen - 1)
+		text = (char*) realloc (text, allocd += LCHUNK);
+	for (i = linelen; i > cursor; i--)
+		text [i + 1] = text [i];
+	text [cursor++] = c;
+	text [++linelen] = 0;
+}
+
+void line_struct.del ()
+{
+	int i;
+	for (i = cursor; i < linelen; i++)
+		text [i] = text [i + 1];
+	--linelen;
+}
+
+void line_struct.backspace ()
+{
+	if (cursor == 0) return;
+	--cursor;
+	del ();
+}
+
+void line_struct.preset (char *s)
+{
+	linelen = strlen (s);
+	allocd = linelen + LCHUNK;
+	text = (char*) realloc (text, allocd);
+	cursor = 0;
+}
+
+void line_struct.strcat (char *s)
+{
+	int sl;
+	allocd += sl = strlen (s);
+	linelen += sl;
+	text = (char*) realloc (text, allocd);
+	strcat (text, s);
+}
+
+line_struct.~line_struct ()
+{
+	free (text);
+}
+
+// ::::::::::::::::::::::::::::::::::::
+
+base_readline.ctor (char *pr, int ml)
+{
+	maxlen = ml;
+	prompt = strdup (pr);
+	vcur = 0;
+	Line.ctor ();
+}
+
+void base_readline.do_cchar ()
+{
+	if (Line.linelen < maxlen)
+		Line.add_char (cc);
+}
+
+void base_readline.do_char (int c)
+{
+	switch (cc = c) {
+	case K_UP:
+	case K_DOWN:
+		do_varrow ();
+		break;
+	case K_LEFT:
+	case K_RIGHT:
+		do_harrow ();
+		break;
+	case K_DEL:
+	case '\b':
+		do_bsdel ();
+		break;
+	case K_END:
+	case K_HOME:
+		do_hoend ();
+		break;
+	case K_PGUP:
+	case K_PGDOWN:
+		do_pg ();
+		break;
+	case '\t':
+		do_tab ();
+		break;
+	case '\n':
+		do_enter ();
+		break;
+	case K_SKIP:
+		break;
+	default:
+		do_cchar ();
+	}
+
+	fix_vcur ();
+	present ();
+}
+
+// ::::::::::::::::::::::::
+
+void base_readline.fix_vcur ()
+{
+	if (Line.cursor < vcur) vcur = Line.cursor;
+	if (vcur + width <= Line.cursor) vcur = Line.cursor - width + 1;
+}
+
+void base_readline.do_harrow ()
+{
+	if (cc == K_LEFT) {
+		if (Line.cursor > 0)
+			--Line.cursor;
+	} else {
+		if (Line.cursor < Line.linelen)
+			++Line.cursor;
+	}
+}
+
+void base_readline.do_bsdel ()
+{
+	if (cc == K_DEL) Line.del ();
+	else {
+		Line.backspace ();
+		if (vcur) --vcur;
+	}
+}
+
+void base_readline.do_pg ()
+{ }
+
+void base_readline.do_hoend ()
+{
+	Line.cursor = cc == K_HOME ? 0 : Line.linelen;
+}
+
+// :::::: normally, take tab literally
+
+void base_readline.do_tab ()
+{
+	Line.add_char ('\t');
+}
+
+// :::::: dtor
+
+base_readline.~base_readline ()
+{
+	free (prompt);
+	Line.dtor ();
+}

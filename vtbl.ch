@@ -787,7 +787,7 @@ static void Override_virtual_function (vf_args *args, vlookup *v)
 	vtp->status = args->flagz & FUNCP_FINAL ? VTI_STATUS_FINAL : VTI_STATUS_DD;
 	vtp->cast_avoid_downcast = 0;
 	// create the code of the virtuallity function
-	if (args->fmemb && !modular) 
+	if (args->fmemb && !modular) {
 		if (aliasclass (args->r) == aliasclass (dow))
 			vtp->value = args->fmemb;
 		else if (zero_offset (args->r, dow)) {
@@ -805,6 +805,7 @@ static void Override_virtual_function (vf_args *args, vlookup *v)
 			outprintf (tmp, ')', ';', '}', -1);
 			vtp->code = combine_output (tmp);
 		}
+        }
 }
 
 void purify_vfunc (Token f)
@@ -814,7 +815,7 @@ void purify_vfunc (Token f)
 
 	for (i = 0; i < nVTI; i++)
 		for (v = VirtualInitializer [i].first_entry; v; v = v->next)
-			if (v->value == f || v->code && intchr (v->code, f)) {
+			if (v->value == f || (v->code && intchr (v->code, f))) {
 				v->value = RESERVED_0;
 				VirtualInitializer [i].unused = true;
 			}
@@ -918,7 +919,7 @@ static void virtual_init_definition (initID i, bool stc)
 
 	outprintf (VIRTUALTABLES, '=', '{', -1);
 	for (ve = VirtualInitializer [i].first_entry; ve; ve = ve->next)
-		if (ve->status != VTI_STATUS_NI)
+		if (ve->status != VTI_STATUS_NI) {
 			if (ve->cast_avoid_downcast && ve->value && ve->value != RESERVED_0)
 			// cast avoid downcast
 			outprintf (VIRTUALTABLES, '.', ISTR (ve->vt_ent->zpath),
@@ -930,6 +931,7 @@ static void virtual_init_definition (initID i, bool stc)
 			else if (ve->code)	// virtual variables with const initi
 			outprintf (VIRTUALTABLES, '.',
 				   ISTR (ve->vt_ent->zpath), '=', ISTR (ve->code), ',', -1);
+                }
 	outprintf (VIRTUALTABLES, '}', -1);
 
 closure:
@@ -1156,7 +1158,7 @@ bool lookup_virtual_function_member (recID r, Token f, typeID argv[],
 	ret = status = VTI_STATUS_NI;
 
 	for (i = 0; structs [r].vtis [i] != -1; i++)
-	if ((ret = lookup_virtual_f_ininit (structs [r].vtis[i], f, va, &ent_ret)) != VTI_STATUS_NI)
+	if ((ret = lookup_virtual_f_ininit (structs [r].vtis[i], f, va, &ent_ret)) != VTI_STATUS_NI) {
 		if (status != VTI_STATUS_NI)
 			parse_error (0, "Ambiguity virtual inheritance");
 		else {
@@ -1165,6 +1167,7 @@ bool lookup_virtual_function_member (recID r, Token f, typeID argv[],
 			entn = ent_ret;
 			entname = entn [intlen (entn) - 1];
 		}
+        }
 	free (va);
 
 	if (status == VTI_STATUS_NI || status == VTI_STATUS_FINAL)
@@ -1396,7 +1399,7 @@ static void add_rtti (recID obj, recID der)
 	int i, j;
 
 	i = lookup_rtti (obj, name_of_struct (der));
-	if (i == -1)
+	if (i == -1) {
 		if (!structs [obj].vtis) {
 			// no virtual table! downcast impossible
 			i = new_rtti_entry (obj);
@@ -1407,7 +1410,7 @@ static void add_rtti (recID obj, recID der)
 		} else if (VIDeclarations || structs [obj].have_vi_decls)
 			parse_error_tok (name_of_struct (der), "Virtual inheritance not declared");
 		else i = virtual_inheritance_decl (0, obj, name_of_struct (der));
-
+        }
 	/* activate the virtual table entry */
 	structs [obj].rtti [i].to = der;
 	I = structs [obj].rtti [i].vti;
@@ -1459,7 +1462,7 @@ typeID lookup_virtual_varmemb (recID r, Token m, Token *path, bool const_path, T
 		for (ve = VirtualTable [vt].first_entry; ve; ve = ve->next)
 		if (!ve->isfunction && ve->fname == m)
 			for (vte = VirtualInitializer [ii].first_entry; vte; vte = vte->next)
-			if (vte->vt_ent->entry_name==ve->entry_name && vte->status != VTI_STATUS_NI)
+			if (vte->vt_ent->entry_name==ve->entry_name && vte->status != VTI_STATUS_NI) {
 				if (rett != -1) expr_errort ("ambiguous virtual member", m);
 				else {
 					Token vpath [128];
@@ -1481,6 +1484,7 @@ typeID lookup_virtual_varmemb (recID r, Token m, Token *path, bool const_path, T
 					&& const_path)
 						usage_set_pure ();
 				}
+                        }
 	}
 	return rett;
 }
@@ -1504,7 +1508,7 @@ vtvar access_virtual_variable (recID r, Token m)
 		for (ve = VirtualTable [vt].first_entry; ve; ve = ve->next)
 		if (!ve->isfunction && ve->fname == m)
 			for (vte = VirtualInitializer [ii].first_entry; vte; vte = vte->next)
-			if (vte->vt_ent->entry_name == ve->entry_name && vte->status != VTI_STATUS_NI)
+			if (vte->vt_ent->entry_name == ve->entry_name && vte->status != VTI_STATUS_NI) {
 				if (have != -1) expr_errort ("ambiguous virtual member", m);
 				else {
 					if (VirtualTable [vt].inlined)
@@ -1514,6 +1518,7 @@ vtvar access_virtual_variable (recID r, Token m)
 					ret.t = ve->type;
 					ret.expr = vte->code;
 				}
+                        }
 	}
 	return ret;
 }

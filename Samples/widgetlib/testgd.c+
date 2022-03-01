@@ -1,0 +1,18 @@
+#include "graphdevice.h"
+
+int main ()
+{
+	XWinDevice GD ("sample window", 500, 250);
+	GD.Flush ();
+
+	int i;
+	GD.FillRect (50, 50, 150, 197, COLOR_DARKRED);
+	for (i = 0; i < 200; i++)
+		GD.DrawLine (i, i, i+200, i, i % COLOR_NCOLORS);
+	for (i = 0; i < FONT_NFONTS; i++)
+		GD.DrawText (100, 170+20*i, "Hello World!", i,
+			 i+1, COLOR_BLACK);
+	GD.Flush ();
+	for (;;);
+}
+

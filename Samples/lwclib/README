@@ -1,0 +1,15 @@
+
+The object oriented lwc all-purpose utility library
+---------------------------------------------------
+
+
+Who needs STL?
+
+Seriously though, this is a very object oriented library
+providing dbstrees, inttrees, load_file and an expanding
+array template.
+
+the testlib does not really test much.
+
+This is rather a very good test case for lwc program itself.
+

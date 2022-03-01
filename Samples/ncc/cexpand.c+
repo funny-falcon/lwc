@@ -1,0 +1,195 @@
+/******************************************************************************
+$	Expands tokens from the normalized C source to readable strings,
+$	and other similar routines representing internal compiler data.
+$	The inverse of lexical analyser
+******************************************************************************/
+
+extern "stdio.h" {
+#include <stdio.h>
+}
+extern "stdlib.h" {
+#include <stdlib.h>
+}
+extern "string.h" {
+#include <string.h>
+}
+
+#include "global.h"
+
+int cfile_of (NormPtr p)
+{
+	int s = 0, e = C_Nfiles, m;
+
+	while (e - s > 1)
+		if (C_Files [m = (e + s) / 2].indx < p)
+			s = m;
+		else e = m;
+	return s;
+}
+
+int cline_of (NormPtr p)
+{
+	int s = 0, e = C_Nlines, m;
+
+	while (e - s > 1)
+		if (C_Lines [m = (e + s) / 2].ftok < p)
+			s = m;
+		else e = m;
+	return C_Lines [s].line;
+}
+
+char *in_file (NormPtr p)
+{
+	return C_Files [cfile_of (p)].file;
+}
+
+#define rcase(x) case RESERVED_ ## x: strcpy (tmp, #x); break
+#define ocase(x, y) case x: strcpy (tmp, y); break
+
+char *expand (int token)
+{
+static	char tmp [128];
+	if (token < 0) return "internal BUG";
+	if (ISSYMBOL (token)) {
+		if (SYMBOLID (token) > C_Nsyms)
+			return strcpy (tmp, "***Fatal Flaw**");
+		return strcpy (tmp, C_Syms [SYMBOLID (token)]);
+	}
+	if (ISSTRING (token))
+		snprintf (tmp, sizeof tmp, "\"%s\"", C_Strings [token - STRINGBASE]);
+	else if (ISNUMBER (token)) {
+		if (token >= INUMBER)
+			sprintf (tmp, "%i", token - INUMBER);
+		else if (token >= FLOATBASE)
+			sprintf (tmp, "%e", C_Floats [token - FLOATBASE]);
+		else if (token >= UINT32BASE)
+			sprintf (tmp, "%lu", C_Unsigned [token - UINT32BASE]);
+		else if (token >= INT32BASE)
+			sprintf (tmp, "%li", C_Ints [token - INT32BASE]);
+		else if (token >= UINT64BASE)
+			sprintf (tmp, "%lu", C_ULongs [token - UINT64BASE]);
+		else if (token >= INT64BASE)
+			sprintf (tmp, "%li", C_Longs [token - INT64BASE]);
+		else if (token >= INT16BASE)
+			sprintf (tmp, "%i", C_Shortints [token - INT16BASE]);
+		else sprintf (tmp, "%i", C_Chars [token - INT8BASE]);
+	} else if (token < 127)
+		sprintf (tmp, "%c", token);
+	else if (ISOPERATOR(token)) switch (token) {
+		ocase (ELLIPSIS, "...");
+		ocase (POINTSAT, "->");
+		ocase (MINUSMINUS, "--");
+		ocase (ASSIGNA, "+=");
+		ocase (ASSIGNS, "-=");
+		ocase (ASSIGNM, "*=");
+		ocase (ASSIGND, "/=");
+		ocase (ASSIGNR, "%=");
+		ocase (ASSIGNBA, "&=");
+		ocase (ASSIGNBO, "|=");
+		ocase (ASSIGNBX, "^=");
+		ocase (ASSIGNRS, ">>=");
+		ocase (ASSIGNLS, "<<=");
+		ocase (PLUSPLUS, "++");
+		ocase (GEQCMP, ">=");
+		ocase (LSH, "<<");
+		ocase (OROR, "||");
+		ocase (ANDAND, "&&");
+		ocase (EQCMP, "==");
+		ocase (NEQCMP, "!=");
+		ocase (RSH, ">>");
+		ocase (LEQCMP, "<=");
+	default: strcpy (tmp, "n/A\n");
+	} else switch (token) {
+		rcase (case);
+		ocase (FORCEERROR, "//-*-* END OF THE FILE *-*-");
+		rcase (auto);
+		rcase (__asm__);
+		rcase (const);
+		rcase (extern);
+		rcase (inline);
+		rcase (long);
+		rcase (register);
+		rcase (short);
+		rcase (signed);
+		rcase (static);
+		rcase (typedef);
+		rcase (unsigned);
+		rcase (volatile);
+		rcase (void);
+		rcase (char);
+		rcase (int);
+		rcase (float);
+		rcase (double);
+		rcase (struct);
+		rcase (union);
+		rcase (continue);
+		rcase (do);
+		rcase (enum);
+		rcase (for);
+		rcase (goto);
+		rcase (if);
+		rcase (else);
+		rcase (return);
+#ifdef GNU_VIOLATIONS
+		rcase (__label__);
+		rcase (__typeof__);
+#endif
+		rcase (sizeof);
+		rcase (switch);
+		rcase (while);
+		rcase (break);
+		rcase (default);
+	default: strcpy (tmp, "n/A\n");
+	}
+	return tmp;
+}
+
+void debug (const char *s, NormPtr i, int j)
+{
+	FILE *of = stderr;
+	if (i < 0) i = 0;
+	if (i + j > C_Ntok) j = C_Ntok - i;
+	fprintf (of, "%s (%i): %s\"", in_file (i+j/2), cline_of (i+j/2), s);
+	while (j--)
+		fprintf (of, "%s ", expand (CODE [i++]));
+	fprintf (of, "\"\n");
+}
+
+
+void prcode (NormPtr i, int j)
+{
+	printf ("#expression: ");
+	if (i < 0) i = 0;
+	if (i + j > C_Ntok) j = C_Ntok - i;
+	while (j--) {
+		bool b = ISSYMBOL (CODE [i]) || ISRESERVED (CODE [i]);
+		printf ("%s", expand (CODE [i++]));
+		if (b && (ISSYMBOL (CODE [i]) || ISRESERVED (CODE [i])))
+			printf (" ");
+	}
+	printf ("\n");
+}
+
+void prcode (NormPtr i, int j, Symbol p[])
+{
+	int c;
+	printf ("#initialization expression: ");
+	for (c = 0; p [c] != ';'; c++)
+		printf ("%s", expand (p [c]));
+	printf (" = ");
+	if (i < 0) i = 0;
+	if (i + j > C_Ntok) j = C_Ntok - i;
+	while (j--) {
+		bool b = ISSYMBOL (CODE [i]) || ISRESERVED (CODE [i]);
+		printf ("%s", expand (CODE [i++]));
+		if (b && (ISSYMBOL (CODE [i]) || ISRESERVED (CODE [i])))
+			printf (" ");
+	}
+	printf ("\n");
+}
+
+void prcode (NormPtr i, int j, Symbol p)
+{
+	Symbol pp [2] = { p, ';' };
+	prcode (i, j, pp);
+}

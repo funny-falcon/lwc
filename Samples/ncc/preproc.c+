@@ -1,0 +1,227 @@
+extern "sys/wait.h" {
+#include <sys/wait.h>
+}
+extern "sys/mman.h"{
+#include <sys/mman.h>
+}
+extern "sys/stat.h"{
+#include <sys/stat.h>
+}
+extern "fcntl.h"{
+#include <fcntl.h>
+}
+extern "sys/types.h"{
+#include <sys/types.h>
+}
+extern "stdlib.h"{
+#include <stdlib.h>
+}
+extern "string.h"{
+#include <string.h>
+}
+extern "stdio.h"{
+#include <stdio.h>
+}
+extern "unistd.h"{
+#include <unistd.h>
+}
+extern "ctype.h"{
+#include <ctype.h>
+}
+extern "signal.h"{
+#include <signal.h>
+}
+#include "global.h"
+#include "config.h"
+
+bool		usage_only, multiple, include_strings;
+bool		abs_paths = false;
+char		*sourcefile, *preprocfile = PREPROCESSOR_OUTPUT, *cwd;
+static char	**ncc_key;
+
+static bool issource (char *f)
+{
+	char *e = f + strlen (f) - 1;
+	if (*(e-1) == '.')
+		return *e == 'c' || *e == 'h' || *e == 'C' || *e == 'i';
+	return *(e-3) == '.' && (*(e-2) == 'c' || *(e-2) == 'C');
+}
+
+static void openout (char *f)
+{
+	if (!f) return;
+	char *c = (char*) alloca (strlen (f) + sizeof OUTPUT_EXT);
+	freopen (strcat (strcpy (c, f), OUTPUT_EXT), "w", stdout);
+}
+
+extern int nohairy_WEXITSTATUS (int);
+
+static void RUN (char *outfile, char **argv)
+{
+	int i;
+	fprintf (stderr, "Running: ");
+	for (i = 0; argv [i]; i++)
+		fprintf (stderr, "%s ", argv [i]);
+	fprintf (stderr, "\n");
+
+	int pid = fork ();
+	if (pid == 0) {
+		if (outfile) if(!freopen (outfile, "w", stdout))
+			exit (127);
+		execvp (argv [0], argv);
+		exit (127);
+	}
+	int status;
+	waitpid (pid, &status, 0);
+	if (nohairy_WEXITSTATUS (status) != 0) {
+		fprintf (stderr, "Preprocessor failed..\n");
+		exit (1);
+	}
+}
+
+const char help [] =
+"ncc "NCC_VERSION"  -  The new/next generation C compiler\n"
+"The user is the only one responsible for any damages\n"
+"Written by Stelios Xanthakis\n"
+"Homepage: http://students.ceid.upatras.gr/~sxanth/ncc/\n"
+"\n"
+"Options starting with '-nc' are ncc options, while the rest gcc:\n"
+"	-ncgcc : also run gcc compiler (produces useful object file)\n"
+" Files:\n"
+"	-ncoo : write the output to sourcefile.c"OUTPUT_EXT"\n"
+"	-ncspp : keep sourcefile.i preprocessor output instead of "
+				PREPROCESSOR_OUTPUT"\n"
+" Output:\n"
+"	-nccc : compile and produce virtual bytecode\n"
+"	-ncmv : display multiple uses of functions and variables\n"
+" Switches:\n"
+"	-nc00 : do not include constant values (faster/less memory)\n"
+" Extras:\n"
+"	-nckey : scan source file for additional output (see doc)\n"
+" Filenames:\n"
+"	-ncfabs : report absolute pathnames in the output\n"
+;
+
+void preproc (int argc, char**argv)
+{
+	bool spp = false, dontdoit = false;
+	char *keys [10];
+	char **gccopt, **cppopt, **nccopt, **files, **nofileopt;
+	int gccno, cppno, nccno, filesno, nofileno, keyno, i;
+	cppopt = (char**) alloca ((8 + argc) * sizeof (char*));
+	nccopt = (char**) alloca ((3 + argc) * sizeof (char*));
+	gccopt = (char**) alloca ((3 + argc) * sizeof (char*));
+	files = (char**) alloca (argc * sizeof (char*));
+	nofileopt = (char**) alloca ((3 + argc) * sizeof (char*));
+	cppopt [0] = gccopt [0] = "gcc";
+	cppopt [1] = "-E";
+	cppopt [2] = "-D__NCC__";
+	cppopt [3] = "-imacros";
+	cppopt [4] = NOGNU_MACROS;
+	nofileopt [0] = "ncc";
+	files [0] = NULL;
+	cppno = 5;
+	gccno = 1;
+	keyno = filesno = nccno = 0;
+	nofileno = 1;
+	if (1) {
+		fprintf (stderr, "Invoked: ");
+		for (i = 0; i < argc; i++) fprintf (stderr, "%s ", argv [i]);
+		fprintf (stderr, "\n");
+	}
+	for (i = 1; i < argc; i++)
+		if (argv [i][0] == '-' && argv [i][1] == 'n'
+		&& argv [i][2] == 'c')
+			nccopt [nccno++] =
+			 (nofileopt [nofileno++] = argv[i]) + 3;
+		else {
+			gccopt [gccno++] = argv [i];
+			if (issource (argv [i]))
+				cppopt [cppno++] = files [filesno++] = argv [i];
+			else {
+				nofileopt [nofileno++] = argv [i];
+				if (argv [i][0] == '-')
+				if (argv [i][1] == 'D' || argv [i][1] == 'I')
+					if (argv [i][2] == 0) goto separate;
+					else cppopt [cppno++] = argv [i];
+				else if (argv [i][1] == 'i') {
+				separate:
+					cppopt [cppno++] = argv [i++];
+					gccopt [gccno++] = cppopt [cppno++] =
+							   argv [i];
+				} else if (argv [i][1] == 'E')
+					dontdoit = true;
+else; else;
+			}
+		}
+	nccopt [nccno] = gccopt [gccno] = cppopt [cppno] =
+	nofileopt [nofileno + 1] = NULL;
+
+	if (filesno > 1) {
+		fprintf (stderr, "Multiple files. Forking\n");
+		for (i = 0; i < filesno; i++) {
+			nofileopt [nofileno] = files [i];
+			RUN (NULL, nofileopt);
+		}
+		exit (0);
+	}
+
+	include_values = usage_only = true;
+	multiple = false;
+	for (i = 0; i < nccno; i++)
+		if (0);
+#define		NCCOPT(x) else if (!strcmp (nccopt [i], x))
+#define		NCCPOPT(x) else if (!strncmp (nccopt [i], x, sizeof x - 1))
+		NCCOPT ("gcc")	RUN (NULL, gccopt);
+		NCCOPT ("cc")	usage_only = false;
+		NCCOPT ("mv")	multiple = true;
+		NCCOPT ("oo")	openout (files [0]);
+		NCCOPT ("00")	include_values = false;
+		NCCOPT ("spp")	spp = true;
+		NCCOPT ("fabs")	abs_paths = true;
+		NCCPOPT ("key")	keys [keyno++] = nccopt [i] + 3;
+		else {
+			fputs (help, stderr);
+			exit (strcmp (nccopt [i], "help") != 0);
+		}
+
+	if (!(sourcefile = files [0])) {
+		fprintf (stderr, "ncc: No C source file\n");
+		exit (0);
+	}
+	if (dontdoit) {
+		fprintf (stderr, "ncc: '-E'. Won't do it...\n");
+		exit (0);
+	}
+	if (spp) {
+		preprocfile = StrDup (sourcefile);
+		preprocfile [strlen (preprocfile) - 1] = 'i';
+	}
+	if (keyno) {
+		ncc_key = (char**) malloc (sizeof (char*) * (keyno + 1));
+		for (i = 0; i < keyno; i++) ncc_key [i] = keys [i];
+		ncc_key [i] = NULL;
+	}
+	if (usage_only) set_usage_report ();
+	else set_compilation ();
+
+	include_strings = include_values || ncc_key;
+
+	RUN (preprocfile, cppopt);
+}
+
+void ncc_keys ()
+{
+#define KSZ (sizeof NCC_INFILE_KEY - 1)
+	int i, j;
+	if (ncc_key)
+	for (i = 0; i < C_Nstrings; i++)
+	if (!strncmp (C_Strings [i], NCC_INFILE_KEY, KSZ)) {
+		for (j = 0; ncc_key [j]; j++)
+			if (!strncmp (C_Strings [i] + KSZ, ncc_key [j],
+				      strlen (ncc_key [j]))) break;
+		if (ncc_key [j])
+			printf ("%s", C_Strings [i] + KSZ +
+				strlen (ncc_key [j]));
+	}
+}

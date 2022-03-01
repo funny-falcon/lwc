@@ -1,0 +1,61 @@
+/******************************************************************************
+	dbstree.C 
+
+	Dynamic Binary Search Tree used throughout the entire project.
+
+	A dbsNode applied as a parent class to a specific class will provide
+	transparent storage in a dbstree. As a result no duplicates may be
+	stored and locating stored data is performed in less than 32 steps.
+
+	Check dbstree.tex for technical information on this tree.
+
+*****************************************************************************/
+
+extern "stdio.h" {
+#include <stdio.h>
+}
+extern "assert.h" {
+#include <assert.h>
+}
+extern "string.h" {
+#include <string.h>
+}
+#include "dbstree.h"
+
+_lwc_config_ {
+//	lwcdebug PEXPR;
+};
+
+//***************************************************************
+// A tree of case sensitive strings -- char *Name
+//***************************************************************
+
+char *DBS_STRQUERY;
+
+int dbsNodeStr.compare (dbsNodeStr n)
+{
+	return strcmp (Name, n.Name);
+}
+
+int dbsNodeStr.compare ()
+{
+	return strcmp (Name, DBS_STRQUERY);
+}
+
+dbsNodeStr.dbsNodeStr ()
+{
+	Name = DBS_STRQUERY;
+}
+
+dbsNodeStr.~dbsNodeStr ()
+{ }
+
+//***************************************************************
+// Instantiate implementation of dbsTreeStr
+//***************************************************************
+
+
+dbsTreeTemplate_implementation (symboltmp, symboltmpTree, 25)
+dbsTreeTemplate_implementation (stringtmp, stringtmpTree, 25)
+dbsTreeTemplate_implementation (utype, utypeTree, 22)
+dbsTreeTemplate_implementation (argNode, argNodeTree, 21)

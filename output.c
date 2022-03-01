@@ -224,20 +224,23 @@ void substitute_output (OUTSTREAM o, Token t, Token r)
 
 void export_output (OUTSTREAM o)
 {
-	int i, k;
+	int i; //, k;
 	ms *p;
 	FILE *pstream = stdout;
 #ifdef DEBUG
-	if (debugflag.OUTPUT_INDENTED&&1)
+	if (debugflag.OUTPUT_INDENTED||1) {
+		/* Close stderr because indent prints stupid errors */
+		close (2);
 		if (!(pstream = popen ("indent -kr -st -l90", "w"))) {
 			fprintf (stderr, "cannot find the 'indent' program."
 				" output is one big line of tokens\n");
 			pstream = stdout;
 		}
+	}
 	if (debugflag.GENERAL)
 		PRINTF ("+++++++++++++ PROGRAM +++++++++++++\n");
 #endif
-	for (k = 0, p = o->first; p; p = p->next)
+	for (/*k = 0,*/ p = o->first; p; p = p->next)
 		for (i = 0; i < p->i; i++) {
 			fputs (expand (p->data [i]), pstream);
 			fputc (' ', pstream);
@@ -251,7 +254,7 @@ void export_output (OUTSTREAM o)
 	fputc ('\n', pstream);
 	fflush (pstream);
 #ifdef DEBUG
-	if (debugflag.OUTPUT_INDENTED && pstream != stdout)
+	if (pstream != stdout)
 		pclose (pstream);
 #endif
 }

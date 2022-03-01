@@ -267,11 +267,12 @@ static int compare_usages (usaged *u1, recID rd, usaged *u2, recID rb, Token dep
 			switch (is_another_autof (u1 [i].u.t)) {
 			case AF_TRUE: return AF_TRUE;
 			case AF_FALSE: continue;
-			default: for (j = 0; j < nd; j++)
+			default:
+                            for (j = 0; j < nd; j++)
 				if (deps [j] == u1 [i].u.t)
 					break;
-				if (j == nd)
-					deps [nd++] = u1 [i].u.t;
+                            if (j == nd)
+				deps [nd++] = u1 [i].u.t;
 			}
 		ncase USE_VVAR:
 			if (intcmp (u1 [i].u.s, u2 [i].u.s))
@@ -552,7 +553,7 @@ void define_auto_functions ()
 	//
 	objective.recording = true;
 	for (a = first; a; a = a->next)
-		if (a->dcltext = instantiate_auto (a))
+		if ((a->dcltext = instantiate_auto (a)))
 			a->textok = textok, a->cpure = calls_pure, a->udata = reset_udata ();
 	objective.recording = false;
 
@@ -689,7 +690,7 @@ static OUTSTREAM do_function (funcd *f)
 	return_typeID = f->ret_type;
 	if (objective.recording)
 		usage_typeID (return_typeID);
-	if (MAIN = f->name == RESERVED_main)
+	if ((MAIN = f->name == RESERVED_main))
 		MainModule = true;
 	objective.isdtor = f->is_destructor;
 

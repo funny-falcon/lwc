@@ -125,7 +125,7 @@ printf ("Willdo [%s]\n", txt);
 
 typedef struct snode_t {
 	struct snode_t *less, *more;
-	char *txt;
+	const char *txt;
 	int id;
 } snode;
 
@@ -134,7 +134,7 @@ static snode *symbol_tree, *value_tree;
 static int symbol_inc, value_inc;
 int c_nval;
 
-static snode *newnode (char *txt, int id)
+static snode *newnode (const char *txt, int id)
 {
 	snode *nn = (snode*) malloc (sizeof (snode));
 	nn->less = nn->more = NULL;
@@ -321,6 +321,7 @@ char *c_file_of (int p)
 		else	e = m;
 	return files [s].file;
 }
+
 /******************************************************************************
 	-- fix the file/line to token data
 ******************************************************************************/
@@ -363,7 +364,7 @@ static const signed char ll_ctypes [256] = {
 
 //
 
-inline void skip_comment ()
+void skip_comment ()
 {
 	Ci += 2;
 
@@ -379,7 +380,7 @@ inline void skip_comment ()
 	++Ci;
 }
 
-inline void skip_line ()
+void skip_line ()
 {
 	for (;;) {
 		while (Cpp [Ci] != '\n')
@@ -393,7 +394,7 @@ inline void skip_line ()
 	}
 }
 
-inline int skip_ws ()
+int skip_ws ()
 {
 	int cl = 0;
 
@@ -483,7 +484,7 @@ static inline int get_ident ()
 
 	if ((i = enter_symbol (identstr)) == RESERVED__loadtext)
 		return loadtext_directive ();
-	if (i == RESERVED__random_)
+	if (i == RESERVED__LWC_RANDOM_)
 		return random_directive ();
 	return i;
 }
@@ -608,7 +609,7 @@ static inline int get_nconst ()
 static void preproc_line ()
 {
 	// # <line> "file"
-	char file [200], *p1, *p2;
+	char file [256], *p1, *p2;
 	int l;
 
 	if (skip_ws ()) return;
@@ -620,6 +621,8 @@ static void preproc_line ()
 	p2 = strchr (p1, '"');
 	l = p2 - p1;
 	Ci = p2 - Cpp;
+        if(l >= sizeof(file))
+                fatal ("line directive filename too big");
 	strncpy (file, p1, l);
 	file [l] = 0;
 	store_file (file);
@@ -826,6 +829,12 @@ void initlex ()
 	ENTER_SYMBOL (double);
 	ENTER_SYMBOL (modular);
 	ENTER_SYMBOL (class);
+
+	ENTER_SYMBOL (ssz_t);
+	ENTER_SYMBOL (usz_t);
+#ifdef __LWC_HAS_FLOAT128
+	ENTER_SYMBOL (_Float128);
+#endif
 	// extensive
 	ENTER_SYMBOL (__asm__);
 	ENTER_SYMBOL (__extension__);
@@ -833,6 +842,7 @@ void initlex ()
 	ENTER_SYMBOL (__restrict);
 	ENTER_SYMBOL (__thread);
 	ENTER_SYMBOL (__unwind__);
+	ENTER_SYMBOL (__byvalue__);
 	ENTER_SYMBOL (__noctor__);
 	// gnu damage
 	ALIAS_LEX (typeof, __typeof);
@@ -888,6 +898,7 @@ void initlex ()
 	ENTER_SYMBOL (__DATE__);
 	ENTER_SYMBOL (_);
 	ENTER_SYMBOL (ctor);
+	ENTER_SYMBOL (_i_n_i_t_);
 	ENTER_SYMBOL (nothrow);
 	ENTER_SYMBOL (alias);
 	ENTER_SYMBOL (used);
@@ -906,8 +917,13 @@ void initlex ()
 	ENTER_SYMBOL (_CLASS_);
 	ENTER_SYMBOL (typeid);
 	ENTER_SYMBOL (jmp_buf);
+#ifdef	HAVE_BUILTIN_SETJMP
+	ALIAS_LEX (setjmp, __builtin_setjmp);
+	ALIAS_LEX (longjmp, __builtin_longjmp);
+#else
 	ENTER_SYMBOL (setjmp);
 	ENTER_SYMBOL (longjmp);
+#endif
 	ENTER_SYMBOL (__on_throw__);
 	ENTER_SYMBOL (__emit_vtbl__);
 
@@ -928,7 +944,7 @@ void initlex ()
 	ENTER_SYMBOL (__builtin_strncmp);
 	ENTER_SYMBOL (__builtin_strncasecmp);
 	ENTER_SYMBOL (_loadtext);
-	ENTER_SYMBOL (_random_);
+	ENTER_SYMBOL (_LWC_RANDOM_);
 	ENTER_SYMBOL (__FUNCTION__);
 	ENTER_SYMBOL (__PRETTY_FUNCTION__);
 	ENTER_SYMBOL (size_t);
@@ -1014,7 +1030,7 @@ static void calc_binshift ()
 /******************************************************************************
 	yydo interface
 ******************************************************************************/
-void fatal (char *m)
+void fatal (const char *m)
 {
 	fprintf (stderr, "lex-error: %s\n", m);
 	exit (1);
@@ -1117,7 +1133,7 @@ static char **dynsym;
 static int ndynsym, dynsymalloc;
 static snode *ns_tree;
 
-static snode *lookup_dynsym (char *s)
+static snode *lookup_dynsym (const char *s)
 {
 	snode *n = ns_tree;
 	snode *r = (snode*) malloc (sizeof *r);
@@ -1233,7 +1249,7 @@ long long int eval_intll (Token c)
 	reserved. Like "__FUNCTION__" "main", etc.
 	The search in N, but this is ok (for now at least)
 ******************************************************************************/
-Token Lookup_Symbol (char *s)
+Token Lookup_Symbol (const char *s)
 {
 	int i;
 	for (i = 0; i < c_nsym; i++)
@@ -1274,7 +1290,7 @@ char *expand (int token)
 		if (token >= ARGBASE) return "*argument*";
 		return dynsym [token - DYNBASE];
 	}
-	if (escop = token >= ESCBASE) token -= ESCBASE;
+	if ((escop = token >= ESCBASE)) token -= ESCBASE;
 	if (token > 256) switch (token) {
 		ocase (ELLIPSIS, "...");
 		pcase (POINTSAT, "->");

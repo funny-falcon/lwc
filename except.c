@@ -208,7 +208,7 @@ NormPtr try_statement (OUTSTREAM o, NormPtr p)
 
 	outprintf (o, '{', RESERVED_struct, longjmp_stack_t, longjmp_ctx, ';', -1);
 
-	if (have_retcode = CODE [p] == '(') {
+	if ((have_retcode = CODE [p] == '(')) {
 		NormPtr p2;
 		p = skip_parenthesis (p2 = p + 1) - 1;
 		CODE [p] = ';';
@@ -278,7 +278,7 @@ NormPtr on_throw_statement (OUTSTREAM o, NormPtr p)
 
 	outprintf (o, RESERVED_struct, longjmp_stack_t, longjmp_ctx, ';', -1);
 
-	if (have_retcode = CODE [p] == '(') {
+	if ((have_retcode = CODE [p] == '(')) {
 		NormPtr p2;
 		p = skip_parenthesis (p2 = p + 1) - 1;
 		CODE [p] = ';';

@@ -1,0 +1,24 @@
+==2005== valgrind-1.0.4, a memory error detector for x86 GNU/Linux.
+==2005== Copyright (C) 2000-2002, and GNU GPL'd, by Julian Seward.
+==2005== Estimated CPU clock rate is 1684 MHz
+==2005== For more details, rerun with: -v
+==2005== 
+Running: cpp -D__LWC__ dbstree.c+ 
+EXPORTING STRUCTURE _struct0_AnOnYmOuS
+EXPORTING STRUCTURE _struct1_AnOnYmOuS
+EXPORTING STRUCTURE _struct2_AnOnYmOuS
+EXPORTING STRUCTURE __sched_param
+EXPORTING STRUCTURE _pthread_fastlock
+EXPORTING STRUCTURE _pthread_descr_struct
+==2005== Use of uninitialised value of size 4
+==2005==    at 0x805DF68: outprintf (output.c:113)
+==2005==    by 0x8055610: export_structs (hier.c:1618)
+==2005==    by 0x804905C: main (main.c:127)
+==2005==    by 0x402544A2: __libc_start_main (in /lib/libc.so.6)
+==2005== 
+==2005== Invalid read of size 4
+==2005==    at 0x805DF68: outprintf (output.c:113)
+==2005==    by 0x8055610: export_structs (hier.c:1618)
+==2005==    by 0x804905C: main (main.c:127)
+==2005==    by 0x402544A2: __libc_start_main (in /lib/libc.so.6)
+==2005==    Address 0x0 is not stack'd, malloc'd or free'd
