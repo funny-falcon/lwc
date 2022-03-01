@@ -1585,7 +1585,7 @@ again:;
 		return F->t;
 
 	/* if cant get address, dont */
-	if ((tmpvs [0] = R.tmpv) && (!path ? !throuptr : r == 1))
+	if ((tmpvs [0] = R.tmpv && (!path ? !throuptr : r == 1)))
 		argt [0] = ptrdown (argt [0]);
 
 	/* make room for the new argument */
