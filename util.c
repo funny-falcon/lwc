@@ -350,7 +350,7 @@ void intremove (intnode **root, intnode *i)
 	unsigned int key = i->key;
 	intnode *n = *root;
 
-	if (!((isroot = n == i))) {
+	if (!(isroot = (n == i))) {
 		for (bt = 1; bt; bt *= 2)
 			if (key & bt)	// avoid braces like hell
 				if (n->less != i) n = n->less;
