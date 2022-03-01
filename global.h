@@ -39,6 +39,7 @@
 #define CASE_RANGERS
 #define HAVE_GNUC_LOCAL_LABELS
 #define HAVE_GNUC_ATTR_NORETURN
+//#define HAVE_BUILTIN_SETJMP
 #if __GNUC__ >= 4
 #define BROKEN_ALIASES
 #endif
@@ -202,7 +203,7 @@ extern FILE	*logstream;
 //*****************************************************************************
 
 extern void	preproc (int, char**);
-extern char	*current_file, *main_file;
+extern char	*current_file, main_file[];
 
 //*****************************************************************************
 // lwc_config.h
@@ -617,7 +618,7 @@ extern typeID typeID_voidP ,typeID_void, typeID_uint, typeID_ebn_f, typeID_intP;
 // - build db
 
 #define		VIRTUALPAR_BOOST	10000
-extern recID	enter_struct		(Token, Token, bool, bool, bool, bool);
+extern recID	enter_struct		(Token, Token, bool, bool, bool, bool, bool);
 extern void	set_depend		(recID, recID);
 extern void	set_declaration		(recID, Token*);
 extern void	set_parents		(recID, recID[]);
@@ -693,6 +694,7 @@ extern bool	has_void_ctor	(recID);
 extern bool	has_copy_ctor	(recID);
 extern bool	has_dtor	(recID);
 extern bool	always_unwind	(recID);
+extern bool	by_ref		(typeID);
 extern Token	idtor		(recID);
 extern Token	vdtor		(recID);
 extern bool	has_ctors	(recID);
@@ -770,6 +772,7 @@ extern Token	name_virtual_inner	(recID, recID, Token, typeID);
 extern Token	name_name_enumerate	(Token, int);
 extern Token	name_rtti_slot		(recID, recID);
 extern Token	name_intern_ctor	(recID);
+extern Token	name_init_func		(recID);
 extern Token	name_intern_dtor	(recID);
 extern Token	name_intern_vdtor	(recID);
 extern Token	name_derrive_memb	(recID);
@@ -787,6 +790,7 @@ extern Token	name_longcontinue	();
 //*****************************************************************************
 
 extern Token	i_call_initialization	(recID);
+extern Token	i_init_object		(recID);
 extern Token	i_downcast_function	(recID, recID);
 extern Token	i_downcast_null_safe	(recID, recID);
 extern Token	i_upcast_null_safe	(recID, recID, Token*, bool);

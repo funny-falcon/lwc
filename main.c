@@ -29,13 +29,13 @@ char *current_file;
 void init ()
 {
 	Token t;
-	int p [6] = { -1, };
+	int p [8] = { -1, };
 	Token nodcl [] = { -1 };
 	Token xargs [] = { RESERVED_x, -1 };
 
 	// null invalid structure && type
 
-	enter_struct (NOOBJ, 1, 0, 0, 0, 0);
+	enter_struct (NOOBJ, 1, 0, 0, 0, 0, 0);
 	enter_type (p);
 
 	// common types
@@ -94,6 +94,26 @@ void init ()
 	}
 	if ((t = Lookup_Symbol ("__builtin_constant_p"))) {
 		sintprintf (p, B_SINT, '(', B_ELLIPSIS, INTERNAL_ARGEND, -1);
+		xdeclare_function (&Global, t, t, enter_type (p), nodcl, xargs, FUNCP_NOTHROW, 0,0);
+	}
+	if ((t = Lookup_Symbol ("__builtin_strcmp"))) {
+		sintprintf (p, typeID_charP, '(', typeID_charP, typeID_charP, INTERNAL_ARGEND, -1);
+		xdeclare_function (&Global, t, t, enter_type (p), nodcl, xargs, FUNCP_NOTHROW, 0,0);
+	}
+	if ((t = Lookup_Symbol ("__builtin_strchr"))) {
+		sintprintf (p, typeID_charP, '(', typeID_charP, typeID_int, INTERNAL_ARGEND, -1);
+		xdeclare_function (&Global, t, t, enter_type (p), nodcl, xargs, FUNCP_NOTHROW, 0,0);
+	}
+	if ((t = Lookup_Symbol ("__builtin_memset"))) {
+		sintprintf (p, typeID_charP, '(', typeID_charP, typeID_charP, typeID_int, INTERNAL_ARGEND, -1);
+		xdeclare_function (&Global, t, t, enter_type (p), nodcl, xargs, FUNCP_NOTHROW, 0,0);
+	}
+	if ((t = Lookup_Symbol ("__builtin_memmove"))) {
+		sintprintf (p, typeID_charP, '(', typeID_charP, typeID_charP, typeID_int, INTERNAL_ARGEND, -1);
+		xdeclare_function (&Global, t, t, enter_type (p), nodcl, xargs, FUNCP_NOTHROW, 0,0);
+	}
+	if ((t = Lookup_Symbol ("__builtin_memcpy"))) {
+		sintprintf (p, typeID_charP, '(', typeID_charP, typeID_charP, typeID_int, INTERNAL_ARGEND, -1);
 		xdeclare_function (&Global, t, t, enter_type (p), nodcl, xargs, FUNCP_NOTHROW, 0,0);
 	}
 	sintprintf (p, B_VOID, '(', typeID_uint, INTERNAL_ARGEND, '*', -1);
@@ -185,6 +205,7 @@ int main (int argc, char **argv)
 		fprintf (stderr, "No such file or directory\n");
 		return 1;
 	}
+	unlink (main_file);
 
 #ifdef	DO_CPP
 	cleanup_cpp ();

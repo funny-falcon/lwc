@@ -55,6 +55,37 @@ Token i_call_initialization (recID r)
 	return fn;
 }
 
+static intnode *dinitos;
+
+Token i_init_object (recID r)
+{
+	intnode *n = intfind (dinitos, r);
+	if (n) return n->v.i;
+
+	/*
+		static inline struct A *InItObJ (void *p)
+		{
+			A__ICoNsTrUcTioN (p, 1);
+			return p;
+		}
+	*/
+	Token fn = name_init_func (r);
+	Token n1 = name_of_struct (r);
+	Token xx = RESERVED_x;
+	OUTSTREAM IC = new_stream ();
+
+	outprintf (IC, RESERVED_static, RESERVED_inline, iRESERVED_struct (r), n1, '*', fn, '(',
+		RESERVED_void, '*', xx, ')', '{', i_call_initialization (r), '(', xx, ',',
+		RESERVED_1, ')', ';', RESERVED_return, xx, ';', '}', -1);
+
+	concate_streams (INTERNAL_CODE, IC);
+
+	union ival i = { .i = fn };
+	intadd (&dinitos, r, i);
+
+	return fn;
+}
+
 static intnode *dcasts;
 
 Token i_downcast_function (recID rb, recID rd)

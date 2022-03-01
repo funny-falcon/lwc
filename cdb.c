@@ -530,7 +530,7 @@ typeID lookup_local_obj (Token n, Token *gn)
 			if (l->n == n) {
 				if (gn) *gn = l->gn;
 				/* Feature: structure by reference */
-				if (StructByRef && c->outer == 0 && isstructure (l->t))
+				if (c->outer == 0 && isstructure (l->t) && by_ref (l->t))
 					return l->t + REFERENCE_BOOST;
 				/* ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ */
 				return l->t;

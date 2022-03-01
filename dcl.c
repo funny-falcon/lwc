@@ -28,7 +28,8 @@ typedef struct {
 	recID basetype;
 	typeID basetype2;
 	bool istypedef, isvirtual, isextern, isstatic, isauto, isvolatile, is__noctor__,
-	     isinline, isconst, islinkonce, ismodular, is__unwind__, isfinal, is__emit_vtbl__;
+	     isinline, isconst, islinkonce, ismodular, is__unwind__, isfinal, is__emit_vtbl__,
+	     is__byvalue__;
 	Token section;
 	Token class_name;
 	Token btname;
@@ -99,6 +100,7 @@ static void sumup_dclqual (Dclbase *b)
 	ADDFLAG(modular);	ADDFLAG(__unwind__);
 	ADDFLAG(volatile);	ADDFLAG(final);
 	ADDFLAG(__noctor__);	ADDFLAG(__emit_vtbl__);
+	ADDFLAG(__byvalue__);
 }
 
 static NormPtr bt_builtin (Dclbase *b, NormPtr p)
@@ -386,7 +388,7 @@ static NormPtr bt_struct (Dclbase *b, NormPtr p, Token struct_or_union)
 		parse_error_tok (name, "already have abstract class named that");
 
 	b->basetype = enter_struct (name, struct_or_union, b->is__unwind__, b->is__noctor__, 
-				    b->is__emit_vtbl__, b->isstatic);
+				    b->is__emit_vtbl__, b->isstatic, b->is__byvalue__);
 
 	/* Feature: Inheritance */
 	if (CODE [p] == ':')
@@ -425,7 +427,7 @@ static NormPtr bt_specialize (Dclbase *b, NormPtr p)
 	sp = specialized (c, ++p);
 	/* * * * * * * * * * * */
 
-	b->basetype = enter_struct (sp, true, b->is__unwind__, 0, 0, 0);
+	b->basetype = enter_struct (sp, true, b->is__unwind__, 0, 0, 0, 0);
 	parse_inheritance (p - 2, b->basetype, abstract_parents);
 
 	if (abstract_has_special (c, b->basetype))
@@ -817,7 +819,7 @@ static NormPtr dirdcl (Dclobj *d, NormPtr p, int inargs)
 
 static NormPtr append_attributes (Dclobj *d, NormPtr p)
 {
-	while (CODE [p] == RESERVED___attribute__) {
+	while (CODE [p] == RESERVED___attribute__ || CODE [p] == RESERVED___asm__) {
 		if (CODE [p + 1] != '(') parse_error (p, "__attribute__ '('");
 		NormPtr p2 = skip_parenthesis (p + 2);
 		while (p < p2)
@@ -889,7 +891,7 @@ static NormPtr arglist (Dclobj *d, NormPtr p)
 			d->dclstr [d->ip++] = b.shortname [i];
 
 		/* Feature: structure by reference */
-		if (isstructure (t) && StructByRef) {
+		if (isstructure (t) && by_ref (t)) {
 			d->dclstr [d->ip++] = '*';
 			d->dclstr [d->ip++] = RESERVED_const;
 		}

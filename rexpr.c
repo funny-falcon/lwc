@@ -754,7 +754,7 @@ static Token *rewr_relational (bexpr *e, rewrret *r, rewrret *R)
 	return r->e;
 }
 
-/* binary complement: congratulations */
+/* binary complement */
 static Token *rewr_complement (bexpr *e, rewrret *r)
 {
 	r->t = bt_promotion (r->t);//
@@ -1045,7 +1045,7 @@ static Token *rewr_incdec (bexpr *e, rewrret *r)
 	return r->e;
 }
 
-/* booleans. Ok */
+/* booleans */
 static Token *rewr_boolean (bexpr *e, rewrret *r, rewrret *R)
 {
 	r->refalloca |= R->refalloca;
@@ -1215,7 +1215,7 @@ static Token *rewr_conditional (bexpr *e, rewrret *r)
 	/* #*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*#*# */
 	} else impossible: {
 		r->t = R1.t;
-		expr_warn ("Could not convert to sane type in conditional");
+//		expr_warn ("Could not convert to sane type in conditional");
 	}
 
 	r->e = alloctok (intlen (e->branch [0]) + 4
@@ -1432,13 +1432,24 @@ static typeID rewr_membcall (OUTSTREAM O, bexpr *e, bexpr *eb, typeID argt[], bo
 	if (eb->branch [0][1] == -1 && !is_object_in_scope (eb->branch [0][0])
 	&& lookup_object (eb->branch [0][0])) {
 		recID rec = lookup_object (e->branch [0][0]);
+
+		/* special class.__init__ (void*) function, to initialize
+		   and object to the given memory address */
+		if (mf == RESERVED__i_n_i_t_) {
+			e->branch [0][0] = i_init_object (rec);
+			e->branch [0][1] = -1;
+			int p [10];
+			sintprintf (p, typeID_voidP, '(', typeID_voidP, INTERNAL_ARGEND, -1);
+			return enter_type (p);
+		}
+
 		if (!lookup_function_member (rec, mf, argt, F, true) || !(F->flagz & FUNCP_MODULAR))
 		{
 			if (!objective.yes || !isancestor (objective.class, rec))
 				expr_errort ("No such modular function", mf);
 			/* Feature: class.func() to call parent func */
 			SET_MAYTHROW ((*F));
-			sintprintf (frealloc (&eb->branch [0], 9), '(', '*', '(',
+			sintprintf (frealloc (&eb->branch [0], 10), '(', '*', '(',
 				    name_of_struct (rec), '*', ')', RESERVED_this, ')', -1);
 			goto proceed;
 		}
@@ -1896,7 +1907,7 @@ static Token *rewr_fcall (bexpr *e, rewrret *r)
 				frealloc (&e->branch [0], 4);
 				sintprintf (e->branch [0], e->expr [0], isstructure (r->t) ?
 					    '.' : POINTSAT, RESERVED_oper_fcall, -1);
-				goto fmemb_call;
+				goto fmemb_call0;
 			}
 			/* ()()()()()()()()()()()()()()()()()()() */
 			else expr_error ("not a pointer to function");
@@ -1931,6 +1942,7 @@ static Token *rewr_fcall (bexpr *e, rewrret *r)
 	 * w/o the feature the expression is a classic C pointer to function
 	 */
 
+	fmemb_call0:;
 		Token *sv1 = allocaint (intlen (e->branch [0]) + 1);
 		intcpy (sv1, e->branch [0]);
 
@@ -2064,7 +2076,7 @@ static Token *rewr_fcall (bexpr *e, rewrret *r)
 			break;
 
 		/* Feature: structure by reference */
-		if (StructByRef && isstructure (argt [i]) && isstructure (argtypes [i])) {
+		if (isstructure (argt [i]) && isstructure (argtypes [i]) && by_ref (argt [i])) {
 			if (tmpvs [i])
 				need_trampoline = true;
 			else

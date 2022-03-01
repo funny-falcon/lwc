@@ -26,6 +26,7 @@
 #define TYPEID_POST	"TyPeId"
 #define ARRDTOR_POST	"aRrDtOr"
 #define OBJCTOR		"ObJFiLe_ctor"
+#define INITF_POST	"InItObJ"
 
 #define NAME_TRUNCATED	"_TrNC"
 
@@ -316,6 +317,13 @@ Token name_intern_ctor (recID r)
 {
 	char tmp [512];
 	sprintf (tmp, "%s_"INCTOR_POST, expand (name_of_struct (r)));
+	return new_symbol (strdup (name_not_too_long (tmp)));
+}
+
+Token name_init_func (recID r)
+{
+	char tmp [512];
+	sprintf (tmp, "%s_"INITF_POST, expand (name_of_struct (r)));
 	return new_symbol (strdup (name_not_too_long (tmp)));
 }
 

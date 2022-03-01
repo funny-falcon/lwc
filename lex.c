@@ -321,6 +321,7 @@ char *c_file_of (int p)
 		else	e = m;
 	return files [s].file;
 }
+
 /******************************************************************************
 	-- fix the file/line to token data
 ******************************************************************************/
@@ -483,7 +484,7 @@ static inline int get_ident ()
 
 	if ((i = enter_symbol (identstr)) == RESERVED__loadtext)
 		return loadtext_directive ();
-	if (i == RESERVED__random_)
+	if (i == RESERVED__LWC_RANDOM_)
 		return random_directive ();
 	return i;
 }
@@ -841,6 +842,7 @@ void initlex ()
 	ENTER_SYMBOL (__restrict);
 	ENTER_SYMBOL (__thread);
 	ENTER_SYMBOL (__unwind__);
+	ENTER_SYMBOL (__byvalue__);
 	ENTER_SYMBOL (__noctor__);
 	// gnu damage
 	ALIAS_LEX (typeof, __typeof);
@@ -896,6 +898,7 @@ void initlex ()
 	ENTER_SYMBOL (__DATE__);
 	ENTER_SYMBOL (_);
 	ENTER_SYMBOL (ctor);
+	ENTER_SYMBOL (_i_n_i_t_);
 	ENTER_SYMBOL (nothrow);
 	ENTER_SYMBOL (alias);
 	ENTER_SYMBOL (used);
@@ -914,8 +917,13 @@ void initlex ()
 	ENTER_SYMBOL (_CLASS_);
 	ENTER_SYMBOL (typeid);
 	ENTER_SYMBOL (jmp_buf);
+#ifdef	HAVE_BUILTIN_SETJMP
+	ALIAS_LEX (setjmp, __builtin_setjmp);
+	ALIAS_LEX (longjmp, __builtin_longjmp);
+#else
 	ENTER_SYMBOL (setjmp);
 	ENTER_SYMBOL (longjmp);
+#endif
 	ENTER_SYMBOL (__on_throw__);
 	ENTER_SYMBOL (__emit_vtbl__);
 
@@ -936,7 +944,7 @@ void initlex ()
 	ENTER_SYMBOL (__builtin_strncmp);
 	ENTER_SYMBOL (__builtin_strncasecmp);
 	ENTER_SYMBOL (_loadtext);
-	ENTER_SYMBOL (_random_);
+	ENTER_SYMBOL (_LWC_RANDOM_);
 	ENTER_SYMBOL (__FUNCTION__);
 	ENTER_SYMBOL (__PRETTY_FUNCTION__);
 	ENTER_SYMBOL (size_t);

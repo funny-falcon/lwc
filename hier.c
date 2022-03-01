@@ -80,7 +80,7 @@ typedef struct {
 	Token dtor_name;
 	bool has_dtor, dtor_nothrow;
 	bool has_dtorable, autodtor;
-	bool unwind, noctor, evt;
+	bool unwind, noctor, evt, byvalue;
 	Token idtor, vdtor;
 
 	Token keyfunc;
@@ -476,7 +476,7 @@ void gen_construction_code (OUTSTREAM o, recID r, Token obj)
 static intnode *structtree;
 static int nstructs, nallocstructs;
 
-recID enter_struct (Token e, Token tag, bool unwind, bool noctor, bool evt, bool sclass)
+recID enter_struct (Token e, Token tag, bool unwind, bool noctor, bool evt, bool sclass, bool byvalue)
 {
 	intnode *in = intfind (structtree, e);
 	int pt [3] = { nstructs, '*', -1 };
@@ -487,6 +487,8 @@ recID enter_struct (Token e, Token tag, bool unwind, bool noctor, bool evt, bool
 			structs [r].unwind = true;
 		if (noctor)
 			structs [r].noctor = true;
+		if (byvalue)
+			structs [r].byvalue = true;
 		return r;
 	}
 
@@ -507,6 +509,7 @@ recID enter_struct (Token e, Token tag, bool unwind, bool noctor, bool evt, bool
 	structs [nstructs].firstmember = 0;
 	structs [nstructs].printed = false;
 	structs [nstructs].unwind = unwind;
+	structs [nstructs].byvalue = byvalue;
 	structs [nstructs].noctor = noctor;
 	structs [nstructs].evt = evt;
 	structs [nstructs].has_vbase = 0;
@@ -1355,6 +1358,11 @@ bool has_dtor (recID r)
 bool always_unwind (recID r)
 {
 	return structs [r].unwind;
+}
+
+bool by_ref (typeID r)
+{
+	return StructByRef && !structs [base_of (r)].byvalue;
 }
 
 Token dtor_name (recID r)

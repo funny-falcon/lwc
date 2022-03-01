@@ -212,7 +212,8 @@ void warning_tok (const char *p, Token t)
 void debug_pr_type (typeID t)
 {
 	int i;
-	PRINTF ("type[%i]: ", t);
+        char tmp [64]; nametype (tmp, t);
+	PRINTF ("type[%i %s]: ", t, tmp);
 	int *tt = open_typeID (t);
 	PRINTF ("(%i)", tt [0]);
 	for (i = 1; tt [i] != -1; i++)
@@ -274,7 +275,13 @@ typeID bt_promotion (typeID t)
 		return t;
 	if (tt [0] <= B_ULLONG)
 		return typeID_int;
-	if (tt [0] <= B_LDOUBLE)
+	if (tt [0] <=
+#ifdef __LWC_HAS_FLOAT128
+			B_FLOAT128
+#else
+			B_LDOUBLE
+#endif
+                                )
 		return typeID_float;
 	return t;
 }
